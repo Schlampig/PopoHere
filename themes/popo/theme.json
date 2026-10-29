@@ -1,0 +1,93 @@
+{
+  "id": "popo",
+  "displayName": "Popo",
+  "version": "0.1",
+  "canvas": 640,
+
+  "behavior": {
+    "idle_duration_sec": 5,
+    "walk_probability": 0.30,
+    "scratch_probability": 0.30,
+    "scratch_cooldown_sec": 3,
+    "repeat_paw_window_sec": 3,
+    "click_max_drift_px": 5,
+    "click_max_duration_ms": 300,
+    "menu_timeout_sec": 2,
+    "polling_interval_ms": 50
+  },
+
+  "states": {
+    "idle": {
+      "visuals": ["idle.png"],
+      "loop": true,
+      "fps": 1,
+      "motion": "breathe"
+    },
+    "walk": {
+      "visuals": ["walk.png"],
+      "loop": true,
+      "fps": 1,
+      "duration": 2.5,
+      "motion": "bob-walk",
+      "next": "idle"
+    },
+    "sleep": {
+      "visuals": ["sleep.png"],
+      "loop": true,
+      "fps": 1,
+      "bubble": "💤",
+      "motion": "breathe-slow"
+    },
+    "pet_head": {
+      "visuals": ["pet_head.png"],
+      "loop": false,
+      "duration": 1.5,
+      "bubble": "❤️",
+      "motion": "none"
+    },
+    "pet_paw": {
+      "visuals": ["pet_paw.png"],
+      "loop": false,
+      "duration": 1.0,
+      "bubble": "❗",
+      "motion": "none"
+    },
+    "scratch": {
+      "visuals": ["scratch.png"],
+      "loop": false,
+      "duration": 1.5,
+      "bubble": "💢",
+      "motion": "shake"
+    },
+    "startled": {
+      "visuals": ["startled.png"],
+      "loop": false,
+      "duration": 1.0,
+      "bubble": "😲",
+      "motion": "shake"
+    },
+    "dragging": {
+      "visuals": ["dragging.png"],
+      "loop": true,
+      "fps": 1,
+      "motion": "none"
+    },
+    "landed": {
+      "visuals": ["landed.png"],
+      "loop": false,
+      "duration": 0.8,
+      "motion": "drop"
+    },
+    "menu": {
+      "visuals": ["menu.png"],
+      "loop": true,
+      "fps": 1,
+      "motion": "none"
+    }
+  },
+
+  "hitBoxes": {
+    "head": { "x": 0.26, "y": 0.02, "w": 0.48, "h": 0.46 },
+    "paw": { "x": 0.08, "y": 0.52, "w": 0.84, "h": 0.48 }
+  }
+}

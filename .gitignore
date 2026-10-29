@@ -1,0 +1,34 @@
+# macOS 垃圾
+.DS_Store
+*.swp
+.AppleDouble
+
+# 编辑器
+.vscode/
+.idea/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# PySide6 / 打包产物
+*.app/
+*.dmg
+pysidedeploy.spec
+
+# 构建产物（随时可用 native/build.sh 重新生成）
+build/
+dist/
+prototype/index.html
+
+# 发布包（体积大，且随取随构建）
+releases/
+site/*.zip
+
+
+

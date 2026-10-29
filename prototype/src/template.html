@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PopoHere 原型预览</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    user-select: none; -webkit-user-select: none;
+  }
+  #desktop {
+    position: relative; width: 100vw; height: 100vh; overflow: hidden;
+    background: linear-gradient(150deg, #c8d7f5 0%, #d9ccf0 45%, #f3d9e6 100%);
+  }
+  #menubar {
+    position: absolute; top: 0; left: 0; right: 0; height: 28px; z-index: 40;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 12px; font-size: 12px; color: #1d1d1f;
+    background: rgba(255,255,255,0.55); backdrop-filter: blur(20px);
+    border-bottom: 0.5px solid rgba(0,0,0,0.08);
+  }
+  #menubar .left span { margin-right: 14px; }
+  #menubar .right span { margin-left: 12px; opacity: .75; }
+
+  /* ---- 原生模式：打包进 .app 时只留猫，不显示调试面板和假桌面 ---- */
+  body.native #desktop { background: none; }
+  body.native #menubar, body.native #panel { display: none; }
+  body.native #ctx .native-hidden { display: none; }
+  #stage { position: absolute; inset: 0; }
+
+  #pet {
+    position: absolute; width: 230px; height: 230px; cursor: grab;
+    left: 60px; top: 60px;
+    touch-action: none;
+  }
+  #pet.carrying { cursor: grabbing; }
+  #petImg {
+    width: 100%; height: 100%; display: block; pointer-events: none;
+    filter: drop-shadow(0 8px 14px rgba(0,0,0,.18));
+  }
+  #pet.hidden { display: none; }
+
+  .hitbox { position: absolute; pointer-events: none; display: none;
+    border-radius: 10px; font-size: 10px; color: #fff; padding: 2px 4px; }
+  #hbHead { background: rgba(60,140,255,.28); border: 1.5px dashed rgba(30,90,200,.8); }
+  #hbPaw  { background: rgba(255,140,60,.28); border: 1.5px dashed rgba(200,90,20,.8); }
+  #pet.showHB .hitbox { display: block; }
+
+  #bubble {
+    position: absolute; top: -6px; right: -14px; font-size: 30px; line-height: 1;
+    pointer-events: none; opacity: 0; transform: scale(.6) translateY(6px);
+    transition: opacity .18s ease, transform .18s cubic-bezier(.2,1.6,.4,1);
+    text-shadow: 0 2px 6px rgba(0,0,0,.25);
+  }
+  #bubble.on { opacity: 1; transform: scale(1) translateY(0); }
+  #bubble.float { animation: bubbleFloat 2s ease-in-out infinite; }
+  @keyframes bubbleFloat { 50% { transform: translateY(-6px) scale(1); } }
+
+  /* ---- 动画 ---- */
+  @keyframes breathe { 0%,100%{transform:scaleY(1) scaleX(1)} 50%{transform:scaleY(1.022) scaleX(.995) translateY(-1.5px)} }
+  @keyframes breatheSlow { 0%,100%{transform:scaleY(1)} 50%{transform:scaleY(1.035) translateY(-2px)} }
+  @keyframes bobWalk { 0%{transform:translateX(-14px) rotate(-2deg)} 100%{transform:translateX(14px) rotate(2deg)} }
+  @keyframes shake { 0%,100%{transform:translateX(0) rotate(0)} 25%{transform:translateX(-5px) rotate(-3deg)} 75%{transform:translateX(5px) rotate(3deg)} }
+  @keyframes floating { 0%{transform:translateY(-8px) rotate(-3deg)} 100%{transform:translateY(4px) rotate(3deg)} }
+  @keyframes dropIn { 0%{transform:translateY(-18px) scaleY(.92)} 60%{transform:translateY(2px) scaleY(1.02)} 100%{transform:translateY(0) scaleY(1)} }
+  .m-breathe { animation: breathe 3.2s ease-in-out infinite; transform-origin: 50% 100%; }
+  .m-breathe-slow { animation: breatheSlow 5s ease-in-out infinite; transform-origin: 50% 100%; }
+  .m-bob-walk { animation: bobWalk .75s ease-in-out infinite alternate; }
+  .m-shake { animation: shake .2s linear 3; }
+  .m-float { animation: floating 1.6s ease-in-out infinite alternate; }
+  .m-drop { animation: dropIn .38s cubic-bezier(.3,1.4,.5,1) 1; }
+  .m-none { animation: none; }
+
+  /* ---- 控制面板 ---- */
+  #panel {
+    position: absolute; right: 16px; bottom: 16px; width: 268px; z-index: 30;
+    background: rgba(255,255,255,0.72); backdrop-filter: blur(24px) saturate(1.6);
+    border: .5px solid rgba(0,0,0,.1); border-radius: 14px; padding: 12px 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.14); color: #1d1d1f;
+  }
+  #panel h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; letter-spacing:.3px; }
+  .row { display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; margin: 4px 0; }
+  .row .k { opacity: .6; }
+  .row .v { font-variant-numeric: tabular-nums; font-weight: 600; color: #2b5bd7; }
+  #hint { font-size: 11px; opacity: .65; margin: 6px 0 8px; line-height: 1.5; }
+  hr.sep { border: none; border-top: .5px solid rgba(0,0,0,.1); margin: 8px 0; }
+  .btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+  .btns button {
+    font-size: 10.5px; padding: 5px 2px; border-radius: 7px; cursor: pointer;
+    border: .5px solid rgba(0,0,0,.12); background: rgba(255,255,255,.85); color: #1d1d1f;
+  }
+  .btns button:hover { background: #fff; border-color: #2b5bd7; }
+  .btns button.active { background: #2b5bd7; color: #fff; border-color: #2b5bd7; }
+  #log { font-size: 10px; opacity: .7; height: 62px; overflow: hidden; line-height: 1.45; font-variant-numeric: tabular-nums; }
+  #log div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sliderRow { display:flex; align-items:center; gap:8px; font-size:11px; margin-top:6px; }
+  .sliderRow input { flex: 1; }
+
+  /* ---- 右键菜单 ---- */
+  #ctx {
+    position: absolute; z-index: 50; display: none; min-width: 172px; padding: 5px;
+    background: rgba(246,246,246,.86); backdrop-filter: blur(24px);
+    border: .5px solid rgba(0,0,0,.14); border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.22); font-size: 12.5px; color: #1d1d1f;
+  }
+  #ctx.on { display: block; }
+  #ctx .item { padding: 5px 10px; border-radius: 5px; cursor: pointer; display:flex; justify-content: space-between; gap: 10px; }
+  #ctx .item:hover { background: #2b5bd7; color: #fff; }
+  #ctx .item.off { opacity: .4; pointer-events: none; }
+  #ctx .sep { height: 1px; background: rgba(0,0,0,.1); margin: 4px 6px; }
+  #ctx .state { opacity: .55; font-size: 11px; }
+</style>
+</head>
+<body>
+<div id="desktop">
+  <div id="menubar">
+    <div class="left"><span>🍎</span><span>PopoHere</span><span style="opacity:.6">原型预览 v0.1</span></div>
+    <div class="right"><span>⚡︎</span><span>Wi‑Fi</span><span>🔋</span></div>
+  </div>
+
+  <div id="stage">
+    <div id="pet">
+      <img id="petImg" alt="popo" draggable="false">
+      <div class="hitbox" id="hbHead">头</div>
+      <div class="hitbox" id="hbPaw">脚</div>
+      <div id="bubble"></div>
+    </div>
+  </div>
+
+  <div id="panel">
+    <h3>🔧 调试面板（正式版没有）</h3>
+    <div id="hint">拖拽 = 抱起 · 单击头/脚 = 互动 · 右键 = 菜单<br>静置 5 秒会自己走动或睡着</div>
+    <div class="row"><span class="k">当前状态</span><span class="v" id="vState">idle</span></div>
+    <div class="row"><span class="k">已停留</span><span class="v" id="vElapsed">0.0s</span></div>
+    <div class="row"><span class="k">挠人冷却</span><span class="v" id="vCool">—</span></div>
+    <div class="row"><span class="k">暂停互动</span><span class="v" id="vPause">否</span></div>
+    <hr class="sep">
+    <div class="btns" id="forceBtns"></div>
+    <hr class="sep">
+    <div class="btns" style="grid-template-columns:1fr 1fr">
+      <button id="btnHB">显示判定框</button>
+      <button id="btnReset">重置位置</button>
+    </div>
+    <div class="sliderRow"><span>大小</span><input type="range" id="sizeSlider" min="120" max="420" value="230"><span id="sizeVal">230</span></div>
+    <hr class="sep">
+    <div id="log"></div>
+  </div>
+
+  <div id="ctx">
+    <div class="item" id="mToggle">显示 / 隐藏<span class="state"></span></div>
+    <div class="item" id="mPause">暂停互动<span class="state">否</span></div>
+    <div class="sep"></div>
+    <div class="item off" id="mFolder">打开主题文件夹</div>
+    <div class="item native-hidden" id="mReset">重置宠物位置</div>
+    <div class="sep"></div>
+    <div class="item" id="mQuit">退出 PopoHere</div>
+  </div>
+</div>
+
+<script>
+__IMAGES__
+__THEME__
+__NATIVE__
+__APP_JS__
+</script>
+</body>
+</html>
