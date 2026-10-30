@@ -25,7 +25,6 @@ static NSString * const kSizeKey = @"PopoSize";
 static NSString * const kXKey = @"PopoX";
 static NSString * const kYKey = @"PopoY";
 static NSString * const kHiddenKey = @"PopoHidden";
-static NSString * const kPausedKey = @"PopoPaused";
 static NSString * const kSoundKey = @"PopoSound";
 static NSString * const kStatusOpenKey = @"PopoStatusOpen";
 
@@ -201,10 +200,6 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
 
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
     NSLog(@"PopoHere 页面加载完成 url=%@", webView.URL.path);
-    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-    BOOL paused = [d boolForKey:kPausedKey];
-    [webView evaluateJavaScript:[NSString stringWithFormat:@"App.setPaused(%@)", paused ? @"true" : @"false"]
-              completionHandler:nil];
     [NSAnimationContext runAnimationGroup:^(NSAnimationContext *ctx) {
         ctx.duration = 0.4;
         self.window.animator.alphaValue = 1.0;
@@ -258,9 +253,6 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
         [self openMenuAtX:[b[@"x"] doubleValue] y:[b[@"y"] doubleValue]];
     } else if ([type isEqualToString:@"hidden"]) {
         [self setPetHidden:[b[@"value"] boolValue]];
-    } else if ([type isEqualToString:@"paused"]) {
-        [[NSUserDefaults standardUserDefaults] setBool:[b[@"value"] boolValue] forKey:kPausedKey];
-        [self refreshMenuChecks];
     } else if ([type isEqualToString:@"quit"]) {
         [self savePosition];
         [NSApp terminate:nil];
@@ -298,6 +290,7 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
                                             keyEquivalent:@""];
         mi.target = self;
         mi.representedObject = @{ @"action": @"setSize", @"value": px };
+        mi.tag = 205;                       // 当前尺寸打勾
         [sizes addItem:mi];
     }
     sizeRoot.submenu = sizes;
@@ -311,15 +304,12 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
                                             keyEquivalent:@""];
         mi.target = self;
         mi.representedObject = @{ @"action": @"setSound", @"value": on };
+        mi.tag = 206;                       // 当前声音打勾
         [sounds addItem:mi];
     }
     soundRoot.submenu = sounds;
     soundRoot.tag = 202;
     [menu addItem:soundRoot];
-
-    NSMenuItem *pause = [self item:@"暂停互动" action:@"togglePause"];
-    pause.tag = 203;
-    [menu addItem:pause];
 
     NSMenuItem *autostart = [self item:@"开机自启" action:@"toggleAutostart"];
     autostart.tag = 204;
@@ -354,6 +344,8 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
     if (self.menuPanel.isShown) { [self.menuPanel hide]; return; }   // 右键切换
     CGFloat screenHeight = [NSScreen mainScreen].frame.size.height;
     NSPoint p = NSMakePoint(x, screenHeight - y);   // JS 的 y 从顶部算
+    // 每次右键都回到主菜单：上次停在"定时提醒/待办"不算数，视为已关闭
+    [self.menuPanel setView:@"menu"];
     [self pushSnapshotToPanels];
     [self.menuPanel showAtPoint:p];   // 显示 → onShow → App.menuOpened()
 }
@@ -380,9 +372,6 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
         [d setBool:[value boolValue] forKey:kSoundKey];
         [self refreshMenuChecks];
 
-    } else if ([action isEqualToString:@"togglePause"]) {
-        [self togglePause];
-
     } else if ([action isEqualToString:@"toggleAutostart"]) {
         [self toggleAutostart];
 
@@ -402,7 +391,8 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
         [NSApp terminate:nil];
 
     } else if ([action isEqualToString:@"viewReminders"] || [action isEqualToString:@"viewTodos"]) {
-        [self pushSnapshotToPanels];
+        NSString *view = [action isEqualToString:@"viewReminders"] ? @"reminders" : @"todos";
+        [self.menuPanel setView:view];      // 先切页再显示，避免闪一下主菜单
         if (!self.menuPanel.isShown) {
             NSRect vis = [NSScreen mainScreen].visibleFrame;
             NSPoint p = NSMakePoint(NSMaxX(vis) - 300, NSMaxY(vis) - 4);
@@ -410,9 +400,7 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
             if (btnWin) p = NSMakePoint(NSMidX(btnWin.frame) - 120, NSMaxY(vis) - 2);
             [self.menuPanel showAtPoint:p];
         }
-        NSString *view = [action isEqualToString:@"viewReminders"] ? @"reminders" : @"todos";
-        [self.menuPanel.web evaluateJavaScript:
-            [NSString stringWithFormat:@"Panel.setView('%@')", view] completionHandler:nil];
+        [self pushSnapshotToPanels];
 
     } else if ([action isEqualToString:@"remToggle"]) {
         [self.reminders setEnabled:![[self.reminders items][[value integerValue]] enabled]
@@ -446,7 +434,7 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
         [self.menuPanel hide];
 
     } else if ([action isEqualToString:@"back"]) {
-        [self.menuPanel.web evaluateJavaScript:@"Panel.setView('menu')" completionHandler:nil];
+        [self.menuPanel setView:@"menu"];
     }
 
     [self refreshMenuChecks];
@@ -490,22 +478,38 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
     [self.statusPanel showAtBottomRight];
 }
 
-- (void)refreshMenuChecks {
-    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-    for (NSMenuItem *mi in self.statusItem.menu.itemArray) {
-        if (mi.tag == 201) mi.enabled = !self.petHidden;
-        if (mi.tag == 202) {
-            BOOL hasAudio = NO;             // v2.0 还没有音频素材
-            mi.enabled = hasAudio;
-        }
-        if (mi.tag == 203) mi.state = [d boolForKey:kPausedKey] ? NSControlStateValueOn : NSControlStateValueOff;
-        if (mi.tag == 204) {
-            mi.state = [self autostartEnabled] ? NSControlStateValueOn : NSControlStateValueOff;
-        }
+/* 菜单项的勾选状态是「同一套底层状态」的投影：右键面板里的 ✓ 和这里必须一致 */
+static void PHWalkMenu(NSMenu *menu, void (^apply)(NSMenuItem *)) {
+    for (NSMenuItem *mi in menu.itemArray) {
+        apply(mi);
+        if (mi.submenu) PHWalkMenu(mi.submenu, apply);
     }
 }
 
-#pragma mark - 尺寸 / 暂停 / 自启
+- (void)refreshMenuChecks {
+    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+    CGFloat size = [self petSize];
+    BOOL soundOn = [d boolForKey:kSoundKey];
+
+    PHWalkMenu(self.statusItem.menu, ^(NSMenuItem *mi) {
+        if (mi.tag == 201) {
+            mi.enabled = !self.petHidden;
+            mi.state = self.statusPanel.isShown ? NSControlStateValueOn : NSControlStateValueOff;
+        } else if (mi.tag == 202) {
+            mi.enabled = NO;                // v2.0 还没有音频素材
+        } else if (mi.tag == 204) {
+            mi.state = [self autostartEnabled] ? NSControlStateValueOn : NSControlStateValueOff;
+        } else if (mi.tag == 205) {
+            CGFloat px = [mi.representedObject[@"value"] doubleValue];
+            mi.state = (fabs(px - size) < 1.0) ? NSControlStateValueOn : NSControlStateValueOff;
+        } else if (mi.tag == 206) {
+            BOOL on = [mi.representedObject[@"value"] boolValue];
+            mi.state = (on == soundOn) ? NSControlStateValueOn : NSControlStateValueOff;
+        }
+    });
+}
+
+#pragma mark - 尺寸 / 自启
 
 - (void)applySize:(CGFloat)newSize {
     if (newSize < 60) return;
@@ -517,13 +521,6 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
     [self.window setFrame:f display:YES animate:YES];
     [self.web evaluateJavaScript:[NSString stringWithFormat:@"App.setSize(%f)", newSize]
                completionHandler:nil];
-}
-
-- (void)togglePause {
-    [self.web evaluateJavaScript:@"App.togglePaused()" completionHandler:^(id v, NSError *e) {
-        [[NSUserDefaults standardUserDefaults] setBool:[v boolValue] forKey:kPausedKey];
-        [self refreshMenuChecks];
-    }];
 }
 
 - (NSString *)launchAgentPath {
@@ -631,7 +628,6 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
         @"size": @([self petSize]),
         @"sound": @([d boolForKey:kSoundKey]),
         @"soundAvailable": @NO,
-        @"paused": @([d boolForKey:kPausedKey]),
         @"autostart": @([self autostartEnabled]),
         @"petHidden": @(self.petHidden),
         @"statusOpen": @(self.statusPanel.isShown),
@@ -752,37 +748,70 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
     if (getenv("POPOHERE_QA_SEQ")) [self runQASequence];
 }
 
-- (void)logJSState:(NSString *)tag {
+- (void)qaLog:(NSString *)tag {
+    NSLog(@"[QA] %@ | view=%@ shown=%d", tag, self.menuPanel.view, self.menuPanel.isShown);
     [self.web evaluateJavaScript:@"App.state() + ' streak=' + App.streak() + ' menuOpen=' + App.menuOpen()"
-               completionHandler:^(id r, NSError *e) { NSLog(@"[QA] %@ -> %@", tag, r ?: e); }];
+               completionHandler:^(id r, NSError *e) { NSLog(@"[QA] %@ | js=%@", tag, r ?: e); }];
+}
+
+/* 提醒的加减阶梯：1 → 5 → 10 … 再退回 1，验证不再出现 6/11 这种错位值 */
+- (void)qaReminderLadder {
+    NSInteger idx = 0;
+    if (self.reminders.items.count == 0) return;
+    NSInteger original = self.reminders.items[idx].minutes;
+    [self.reminders setMinutes:1 atIndex:idx];
+    NSMutableString *seq = [NSMutableString stringWithString:@"1 "];
+    for (int k = 0; k < 4; k++) {
+        [self.reminders adjustMinutes:5 atIndex:idx];
+        [seq appendFormat:@"%ld ", (long)self.reminders.items[idx].minutes];
+    }
+    [seq appendString:@"| "];
+    for (int k = 0; k < 4; k++) {
+        [self.reminders adjustMinutes:-5 atIndex:idx];
+        [seq appendFormat:@"%ld ", (long)self.reminders.items[idx].minutes];
+    }
+    NSLog(@"[QA] 提醒阶梯（原值 %ld）：%@", (long)original, seq);
+    [self.reminders setMinutes:original atIndex:idx];
 }
 
 - (void)runQASequence {
     __weak typeof(self) weakSelf = self;
     struct { double at; NSString *what; } steps[] = {
-        {1.0, @"open"}, {1.6, @"log:菜单打开后"}, {2.2, @"preview"}, {2.8, @"log:预览开始"},
-        {8.8, @"log:预览应已结束"}, {9.2, @"clickCat"}, {9.8, @"log:点猫之后"},
+        {1.0, @"open"},         {1.6, @"log:右键菜单"},
+        {2.0, @"reminders"},    {2.6, @"log:进入定时提醒"},
+        {3.2, @"clickCat"},     {3.8, @"log:点猫收起后"},
+        {4.4, @"open"},         {5.0, @"log:再次右键"},
+        {5.6, @"preview"},      {6.2, @"log:预览中"},
+        {12.2, @"log:预览结束"}, {12.8, @"close"},
+        {13.4, @"log:收起后"},   {13.8, @"ladder"},
     };
-    for (int i = 0; i < 7; i++) {
+    for (size_t i = 0; i < sizeof(steps) / sizeof(steps[0]); i++) {
         double at = steps[i].at;
-        NSString *w = steps[i].what;          // 先取出来，block 不能捕获 C 数组
+        NSString *w = steps[i].what;       // block 不能捕获 C 数组
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(at * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             __strong typeof(weakSelf) self = weakSelf;
             if (!self) return;
-            if ([w isEqualToString:@"open"]) { [self openMenuAtX:400 y:300]; }
-            else if ([w isEqualToString:@"preview"]) {
+            if ([w isEqualToString:@"open"]) {
+                [self openMenuAtX:400 y:300];
+            } else if ([w isEqualToString:@"reminders"]) {
+                [self performAction:@"viewReminders" value:nil];
+            } else if ([w isEqualToString:@"preview"]) {
                 [self.web evaluateJavaScript:@"App.preview('sleep')" completionHandler:nil];
-            }
-            else if ([w isEqualToString:@"clickCat"]) {
+            } else if ([w isEqualToString:@"clickCat"]) {
                 // 模拟一次真实单击：走完整的 JS 输入 → 状态机 → 原生联动
                 [self.web evaluateJavaScript:
                     @"(function(){var p=document.getElementById('pet');"
                      "p.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,button:0,screenX:10,screenY:10}));"
                      "window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0,screenX:10,screenY:10}));"
                      "})()" completionHandler:nil];
+            } else if ([w isEqualToString:@"close"]) {
+                [self.menuPanel hide];
+            } else if ([w isEqualToString:@"ladder"]) {
+                [self qaReminderLadder];
+            } else if ([w hasPrefix:@"log:"]) {
+                [self qaLog:[w substringFromIndex:4]];
             }
-            else if ([w hasPrefix:@"log:"]) { [self logJSState:[w substringFromIndex:4]]; }
         });
     }
 }

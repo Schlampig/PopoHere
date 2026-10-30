@@ -14,7 +14,7 @@
 │  │  · 无边框透明 NSWindow，置顶、不进 Dock  │  │
 │  │  · 菜单栏 NSStatusItem                 │  │
 │  │  · 拖拽：NSEvent 本地监视器 → 屏幕坐标    │  │
-│  │  · 位置/大小/暂停 → NSUserDefaults      │  │
+│  │  · 位置/大小/视图 → NSUserDefaults      │  │
 │  │  ┌─────────────────────────────────┐  │  │
 │  │  │ WKWebView                       │  │  │
 │  │  │  func_state   状态机（纯逻辑）    │  │  │

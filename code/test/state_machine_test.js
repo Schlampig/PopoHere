@@ -126,14 +126,6 @@ m.openMenu();
 step(m, BEH.menu_timeout_sec + 0.5);
 eq('兜底超时 → idle', m.state, 'idle');
 
-/* ---- 12. 暂停互动 ---- */
-m = mk(0.9);
-m.paused = true;
-click(m);
-eq('暂停时点击无反应', m.state, 'idle');
-m.pressStart('body');
-eq('暂停时拖拽无反应', m.pressMove(30), false);
-
 /* ---- 13. 长按不算单击 ---- */
 m = mk(0.9);
 m.pressStart('body');

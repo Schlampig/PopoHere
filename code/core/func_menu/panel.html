@@ -175,9 +175,6 @@
         <span class="label">声音</span><span class="value" id="vSound">关</span><span class="chev">›</span>
       </div>
       <div class="options" id="optSound"></div>
-      <div class="row" data-action="togglePause">
-        <span class="label">暂停互动</span><span class="tick" id="vPause"></span>
-      </div>
       <div class="row" data-action="toggleAutostart">
         <span class="label">开机自启</span><span class="tick" id="vAuto"></span>
       </div>
@@ -238,7 +235,7 @@
 
   let snapshot = {
     size: 220, sound: false, soundAvailable: false,
-    paused: false, autostart: false, petHidden: false, statusOpen: false,
+    autostart: false, petHidden: false, statusOpen: false,
     version: '2.0.0', state: 'idle', elapsed: 0,
     states: [], reminders: [], todos: [],
   };
@@ -269,7 +266,6 @@
       ? (snapshot.sound ? '开' : '关') : '无素材';
     document.getElementById('rowStatus').classList.toggle('disabled', snapshot.petHidden);
     document.getElementById('vStatus').textContent = snapshot.statusOpen ? '✓' : '';
-    tick(document.getElementById('vPause'), snapshot.paused);
     tick(document.getElementById('vAuto'), snapshot.autostart);
 
     const running = snapshot.reminders.filter(r => r.enabled).length;
@@ -405,7 +401,7 @@
 
   if (MOCK) {
     snapshot = {
-      size: 220, sound: false, soundAvailable: false, paused: true, autostart: false,
+      size: 220, sound: false, soundAvailable: false, autostart: false,
       petHidden: false, statusOpen: true, version: '2.0.0',
       state: 'touch', elapsed: 1.2, streak: 7, threshold: 10,
       states: [

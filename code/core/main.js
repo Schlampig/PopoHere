@@ -20,7 +20,6 @@
     vState: document.getElementById('vState'),
     vElapsed: document.getElementById('vElapsed'),
     vCool: document.getElementById('vCool'),
-    vPause: document.getElementById('vPause'),
     log: document.getElementById('log'),
     forceBtns: document.getElementById('forceBtns'),
     btnHB: document.getElementById('btnHB'),
@@ -40,7 +39,6 @@
         post({ type: 'menuPanelClose' });
       }
     },
-    onPausedClick: () => renderer.flashBubble('已暂停互动 · 菜单栏里可恢复', 1600),
   });
 
   let petSize = NATIVE ? Math.max(60, window.innerWidth - 16) : 230;
@@ -171,12 +169,6 @@
 
   /* 外壳（菜单栏）通过这些方法控制猫 */
   window.App = {
-    setPaused: (v) => { machine.paused = !!v; },
-    togglePaused: () => {
-      machine.paused = !machine.paused;
-      post({ type: 'paused', value: machine.paused });
-      return machine.paused;
-    },
     show: (v) => { el.pet.classList.toggle('hidden', !v); },
     notify: (text, ms) => renderer.flashBubble(text, ms),
     // 菜单状态由外壳唯一驱动：面板显示 → menuOpened()，面板收起 → menuClosed()

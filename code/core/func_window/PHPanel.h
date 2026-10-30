@@ -17,7 +17,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, strong, readonly) NSWindow *window;
 @property (nonatomic, strong, readonly) WKWebView *web;
-@property (nonatomic, copy) NSString *view;          // "menu" / "status"
+/** 面板当前显示哪个视图（"menu" / "reminders" / "todos" / "status"）。
+    给它赋值会同步通知页面切页，所以不要绕过它直接调 JS。 */
+@property (nonatomic, copy) NSString *view;
 @property (nonatomic) BOOL dismissOnResignKey;
 /** 状态面板：尺寸变化后仍贴住屏幕右下角 */
 @property (nonatomic) BOOL anchorRight;

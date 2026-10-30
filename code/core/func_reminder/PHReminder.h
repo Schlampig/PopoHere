@@ -20,6 +20,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSInteger)runningCount;
 
 - (void)setEnabled:(BOOL)enabled atIndex:(NSInteger)index;
+- (void)setMinutes:(NSInteger)minutes atIndex:(NSInteger)index;
 - (void)adjustMinutes:(NSInteger)delta atIndex:(NSInteger)index;
 
 /** 推进 1 秒；返回本轮到期的提醒名（没有则 nil） */

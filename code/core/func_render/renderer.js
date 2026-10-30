@@ -39,7 +39,6 @@
         const cd = machine.scratchCooldownUntil - machine.clock;
         el.vCool.textContent = cd > 0 ? cd.toFixed(1) + 's' : '—';
       }
-      if (el.vPause) el.vPause.textContent = machine.paused ? '是' : '否';
     }
 
     function flashBubble(text, ms) {

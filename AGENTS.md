@@ -115,9 +115,10 @@ python3 code/build/make_icon.py
 ./code/build/build_app.sh
 ./code/build/build_app.sh --run
 
-# 端到端自检：开菜单 → 预览 sleep → 应回 menu → 点猫 → 应回 idle 且面板收起
-# （结果在 stderr，用 ./PopoHere 2>&1 | grep "\[QA\]" 看）
-POPOHERE_QA_SEQ=1 code/build/dist/PopoHere.app/Contents/MacOS/PopoHere
+# 端到端自检（约 14s，结果在 stderr）：
+#   右键→menu → 进定时提醒(reminders) → 点猫收起 → 再右键应回到 menu
+#   → 预览 sleep → 应回 menu → 收起 → 提醒阶梯 1/5/10/15/20/15/10/5/1
+POPOHERE_QA_SEQ=1 code/build/dist/PopoHere.app/Contents/MacOS/PopoHere 2>&1 | grep "\[QA\]"
 
 # 打包发布 zip
 python3 code/build/package_release.py

@@ -22,7 +22,6 @@
       this.beh = theme.behavior;
       this.state = 'idle';
       this.rand = opts.random || Math.random;
-      this.paused = false;
       this.clock = 0;
       this.elapsed = 0;
       this.visual = null;
@@ -30,8 +29,6 @@
 
       // 状态切换回调：给外壳用（例如离开 menu 就必须把菜单面板收掉）
       this.onTransition = opts.onTransition || null;
-      // 暂停中点了猫：给个提示，否则用户只会觉得"点了没反应"
-      this.onPausedClick = opts.onPausedClick || null;
 
       this._press = null;
       this._carrying = false;
@@ -156,17 +153,13 @@
 
     /* --- 鼠标 --- */
     pressStart(region) {
-      if (this.paused) {
-        if (this.onPausedClick) this.onPausedClick();
-        return;
-      }
       // menu 状态也要记录按压：面板开着时点猫 = 关掉面板，不能把这一下吞掉
       this._press = { region, dragging: false };
     }
 
     pressMove(distPx) {
       const p = this._press;
-      if (!p || this.paused) return false;
+      if (!p) return false;
       if (!p.dragging && distPx >= this.beh.click_max_drift_px) {
         p.dragging = true;
         this._carrying = true;
@@ -180,7 +173,6 @@
       const p = this._press;
       this._press = null;
       if (!p) return;
-      if (this.paused) { this._carrying = false; return; }
 
       if (p.dragging) {
         this._carrying = false;

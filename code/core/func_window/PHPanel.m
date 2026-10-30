@@ -76,9 +76,21 @@
         allowingReadAccessToURL:[NSURL fileURLWithPath:[path stringByDeletingLastPathComponent]]];
 }
 
+- (void)applyView {
+    NSString *js = [NSString stringWithFormat:@"Panel && Panel.setView('%@')", self.view ?: @"menu"];
+    [self.web evaluateJavaScript:js completionHandler:nil];
+}
+
+/* 视图的唯一入口：改属性 → 同步页面。
+   以前是"属性归属性、页面归页面"，谁调了 Panel.setView 只有页面知道，
+   于是面板可以停在上次的子页面，而外壳以为它还在主菜单。 */
+- (void)setView:(NSString *)view {
+    _view = [view copy];
+    [self applyView];
+}
+
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
-    [webView evaluateJavaScript:[NSString stringWithFormat:@"Panel.setView('%@')", self.view]
-             completionHandler:nil];
+    [self applyView];      // 页面刚加载完，把当前视图推过去
 }
 
 #pragma mark - 显示
