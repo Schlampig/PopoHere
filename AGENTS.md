@@ -46,15 +46,25 @@ git push
 判断是会话/窗口服务器的隔离，不是代码问题——但**毛玻璃面板的实际观感、右键弹菜单的位置、
 状态面板的拖动手感，都还没被人工确认过**。拿到真实桌面后请优先验这三点。
 
-### 素材现状
+### 素材现状：⏸ 等用户拍真图（v2.0 代码已完工）
 
-`code/pet_images/` 里是**占位素材**（由 `make_placeholder_assets.py` 复制现有图生成，31 个文件只有 7 张不同）。
-用户按 PRD 拍好真图后会整体替换；那时应当：
-1. 把新图放进 `source/origin_images/`，按 `<状态>_<序号>.png` 命名
-2. 跑 `python3 code/prepare/cutout.py`（会覆盖 `pet_images/`）
-3. 跑 `python3 code/prepare/build_theme.py`
-4. 删除 `make_placeholder_assets.py`
-5. 重跑测试与构建
+`code/pet_images/` 里是**占位素材**（`make_placeholder_assets.py` 复制现有图生成，
+31 个引用只有 7 张不同）。用户会按 PRD 拍完整素材后一次性替换。
+
+**替换时的固定流程**（顺序不能换）：
+
+```bash
+python3 code/prepare/cutout.py --check      # 1. 先只校验命名，不跑模型
+python3 code/prepare/cutout.py              # 2. 抠图 → 覆盖 code/pet_images/
+python3 code/prepare/build_theme.py         # 3. 扫文件名生成 theme.json
+rm code/prepare/make_placeholder_assets.py  # 4. 删掉占位脚本
+python3 code/build/build_web.py && ./code/build/build_app.sh   # 5. 重建
+node code/test/state_machine_test.js && python3 code/test/click_mash_test.py \
+  && python3 code/test/drag_tracking_test.py                   # 6. 三条测试要全绿
+```
+
+替换后要重点手测：**各状态切换会不会"跳"（体型/地面线对不上）**、
+**同状态多帧之间的呼吸感**、**挠人/被撸是否终于长得不一样了**。
 
 ## 目录布局
 
@@ -184,15 +194,22 @@ JS 用 `clientX` 算位移 + `postMessage` 移动窗口会形成**坐标系反�
 
 ## 已知短板
 
-1. **素材重复**：`pet_head/pet_paw/scratch` 源文件相同，`walk/landed/cool` 也相同 → 摸头/摸脚/挠人长得一样
-2. **每状态只有 1 帧**，没有真正的多帧动画
-3. **hitbox 全局一套**：睡姿和站姿共用，躺姿时判定区偏移
-4. **素材写死进 HTML**：用户换图要重新跑构建，不能运行时替换
-5. **没有开机自启**：可加 `~/Library/LaunchAgents/`
-6. **没有 Apple 公证**：别人首次打开要右键 →「打开」
+1. **占位素材**：31 个引用只有 7 张不同图，被撸/挠人/静息看着几乎一样（等真图）
+2. **每状态只有 1 帧**，没有真正的多帧动画；`fps/loop` 已经支持，缺的是图
+3. **素材内联进 HTML**：换图必须重跑构建，不能运行时替换（v1.0 提过，仍未做）
+4. **声音菜单是灰的**：`code/pet_audios/` 与 `source/origin_audios/` 已预留，尚无音频
+5. **没有 Apple 公证**：别人首次打开要右键 →「打开」
+6. **v3 迷宫未做**：`code/core/func_*` 目录结构已就绪，加模块不用动别的
+
+> 已解决、别再写进短板：开机自启（LaunchAgent 已实现）、hitbox 偏移（v2.0 合并成单一 body）
 
 ## 环境踩坑
 
+- **git push 报 `CONNECT tunnel failed, 502` 不是仓库配置问题**：会话环境会注入
+  `HTTPS_PROXY=http://127.0.0.1:49360`，它对 github.com 返回 502，而
+  `curl --noproxy '*' https://github.com` 直连是 200。推法：
+  `env -u HTTPS_PROXY -u HTTP_PROXY -u https_proxy -u http_proxy -u ALL_PROXY git push`
+- **改 `defaults` 前先 `pkill`**：旧实例退出时会把内存里的旧偏好刷回去覆盖你的修改
 - **macOS 自带 grep 是 BSD 版，BRE 不支持 `\|`**：`grep "a\|b"` 会被当字面量、静默无匹配。用 `-E`
 - **合成鼠标事件注入不进来**：本机没有进程被授予辅助功能权限（`AXIsProcessTrusted` = NO），`CGEventPost` 的事件会被丢弃 → 手感类问题只能让用户手测
 - `screencapture` 缺屏幕录制权限写不了盘；`log show` 也读不到本进程日志 → 验证 GUI 靠 `pgrep` + `defaults read com.popohere.pet`
