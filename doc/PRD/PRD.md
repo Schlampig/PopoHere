@@ -145,7 +145,9 @@ v1.0 用 `head` / `paw` 两个 hitbox 区分摸头摸脚。v2.0 **合并为一�
       │
       └── 拖拽 ──▶ dragging ── 释放 ──▶ landed ──▶ idle
 
-   任意状态 ── 右键 ──▶ menu ── 关闭/8s 超时 ──▶ idle
+   任意状态 ── 右键 ──▶ menu ── 点猫/关面板/兜底超时 ──▶ idle
+
+   所有「播完」出口都走 _rest()：菜单面板还开着 → menu，否则 idle
 ```
 
 **完整转换表**
@@ -154,23 +156,36 @@ v1.0 用 `head` / `paw` 两个 hitbox 区分摸头摸脚。v2.0 **合并为一�
 |---|---|---|---|
 | `idle` | 停留满 `idle_duration_sec` | `play` | 概率 `idle_to_play_probability`（默认 0.35） |
 | `idle` | 同上 | `sleep` | 其余概率（默认 0.65，**睡觉概率更高，符合猫性**） |
-| `idle` | 单击 | `touch` | — |
-| `idle` | 拖拽 ≥5px | `dragging` | — |
-| `touch` | 播完 | `scratch` | `touch_streak ≥ touch_scratch_threshold`（**默认 10**） |
-| `touch` | 播完 | `idle` | 否则 |
+| `idle` | 单击 | `touch` | 计入连撸 |
+| `idle` | 拖拽 ≥ `click_max_drift_px` | `dragging` | — |
+| `touch` | 单击 | `touch`（重播） | 连撸 +1；**达到阈值时当场转 `scratch`，不等播完** |
+| `touch` | 播完 | `idle` / `menu` | 见下方「统一出口」 |
 | `touch` | 拖拽 | `dragging` | 立刻打断 |
-| `scratch` | 播完 | `idle` | 进入冷却 `scratch_cooldown_sec`（默认 6s），`touch_streak` 清零 |
-| `play` | 播完 | `idle` | — |
+| `scratch` | 播完 | `idle` / `menu` | 进入冷却 `scratch_cooldown_sec`（默认 6s），`touch_streak` 清零 |
+| `play` | 播完 | `idle` / `menu` | — |
 | `play` | 单击 | `idle` | 打断，**不**触发 `touch` |
 | `sleep` | 单击 / 拖拽 | `startled` | 唯一入口 |
-| `sleep` | 右键 | `menu` | — |
-| `startled` | 播完 | `dragging` | 手还按着 |
-| `startled` | 播完 | `idle` | 否则 |
+| `startled` | 单击 | `touch` | 惊醒瞬间继续点也要计数，否则一轮猛点被动画吃掉 |
+| `startled` | 播完 | `dragging` / `idle`·`menu` | 手还按着 / 否则 |
 | `dragging` | 释放 | `landed` | 有 `landed` 素材 |
-| `dragging` | 释放 | `idle` | 无素材 |
-| `landed` | 播完 | `idle` | — |
-| `menu` | 菜单关闭 / 8s 超时 | `idle` | — |
-| 任意 | 右键 | `menu` | `menu` / `dragging` 状态除外 |
+| `dragging` | 释放 | `idle` / `menu` | 无素材 |
+| `landed` | 单击 | `touch` | 落地动画期间继续点也计数 |
+| `landed` | 播完 | `idle` / `menu` | — |
+| `menu` | 点猫 / 面板关闭 / `menu_timeout_sec` 兜底 | `idle` | 兜底超时同时清掉「菜单开着」标记 |
+| 任意 | 右键 | `menu` | `dragging` 状态除外 |
+| 预览中 | 播完（有 duration 按 duration，没有则 `preview_duration_sec`） | `menu` / `idle` | 见下方「统一出口」 |
+
+**统一出口：`_rest()`**
+
+除 `menu` 之外的每个"播完"都不直接写 `idle`，而是走同一个出口：
+
+```
+菜单面板此刻真的开着 ？ → menu ： idle
+```
+
+这条不变量保证 **「menu 状态 ⟺ 右键菜单面板」同时存在、同时消失**。状态机不猜，只认外壳写入的
+`menu_open`（由面板 `show` / `hide` 回调更新）。状态面板里点状态名是**预览**：只演一遍，
+不写连撸计数，演完同样走 `_rest()`。
 
 **`touch_streak` 算法**
 
@@ -197,9 +212,13 @@ else:
 | `touch_repeat_window_sec` | 4 | 连击判定窗口 |
 | `touch_scratch_threshold` | **10** | 几次连击后翻脸 |
 | `scratch_cooldown_sec` | 6 | 挠完多久内不记仇 |
-| `click_max_drift_px` | 5 | 位移小于它算单击 |
+| `click_max_drift_px` | **12** | 位移小于它算单击；与外壳 `kDragThreshold` 必须一致 |
 | `click_max_duration_ms` | 300 | 时长小于它算单击 |
-| `menu_timeout_sec` | 8 | 菜单兜底超时（v1.0 是 2s，v2.0 是真菜单，需要更久） |
+| `menu_timeout_sec` | **120** | 菜单兜底超时。菜单开着时猫不该自己睡，这里只防"面板没关成功" |
+| `preview_duration_sec` | 6 | 状态面板预览：没有 `duration` 的状态（`sleep`）演多久 |
+
+> `click_max_drift_px` 从 5 调到 12 是实测结论：连点时手抖 6–10px 很常见，5px 会把每一下都
+> 判成拖拽（窗口还会跟着跳），于是 `dragging → landed → idle` 循环，连撸计数永远是 0。
 
 ---
 
@@ -526,7 +545,8 @@ code/core/
 **状态机**
 - [ ] 7 常规 + 2 过渡状态全部可进入可退出，无死锁
 - [ ] 静息 5 秒后按 35/65 分流，重复 100 次分布合理
-- [ ] 连撸 10 次必翻脸；中途停 4 秒以上计数清零；冷却期内不翻脸
+- [ ] 连撸 10 次必翻脸（第 10 下当场翻脸，不用等 touch 播完）；中途停 4 秒以上计数清零；冷却期内不翻脸
+- [ ] 状态面板预览结束后：菜单开着回 `menu`，菜单关着回 `idle`
 - [ ] 睡中点击 → `startled` → `idle`；睡中拖拽 → `startled` → `dragging`
 - [ ] 全部单元测试通过（状态机 + 拖拽）
 

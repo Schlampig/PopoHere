@@ -26,7 +26,7 @@ const mk = (r = 0.5) => new PetStateMachine(THEME, { random: () => r });
 const step = (m, sec, dt = 0.1) => { for (let t = 0; t < sec; t += dt) m.tick(dt); };
 const click = (m) => { m.pressStart('body'); m.pressEnd(100); };
 const rapid = (m, n) => { for (let i = 0; i < n; i++) click(m); };
-const drag = (m) => { m.pressStart('body'); return m.pressMove(10); };
+const drag = (m) => { m.pressStart('body'); return m.pressMove(20); };
 
 const BEH = THEME.behavior;
 
@@ -65,11 +65,10 @@ eq('连撸计数 9', m.touchStreak, 9);
 step(m, 1.6);
 eq('9 次未达阈值 → idle', m.state, 'idle');
 
-/* ---- 6. 第 10 次翻脸 ---- */
+/* ---- 6. 第 10 次当场翻脸（不等 touch 播完） ---- */
 rapid(m, 1);                       // 第 10 次（间隔仍在窗口内）
-eq('第 10 次进入 touch', m.touchStreak, 10);
-step(m, 1.6);
-eq('10 次达阈值 → scratch', m.state, 'scratch');
+eq('第 10 下立刻进入 scratch', m.state, 'scratch');
+eq('连撸计数 10', m.touchStreak, 10);
 
 /* ---- 7. scratch 结束进冷却，冷却期内不再翻脸 ---- */
 step(m, 1.6);
@@ -83,7 +82,6 @@ eq('冷却期内连点不翻脸', m.state, 'idle');
 step(m, BEH.scratch_cooldown_sec + 0.5);
 m.force('idle');                   // 这段时间里猫可能已经睡着了，先拉回 idle
 rapid(m, 10);
-step(m, 1.6);
 eq('冷却结束后可再次翻脸', m.state, 'scratch');
 
 /* ---- 8. 睡中被点 → startled → idle ---- */
@@ -142,12 +140,22 @@ m.pressStart('body');
 m.pressEnd(500);
 eq('长按不触发 touch', m.state, 'idle');
 
-/* ---- 14. 微小位移仍算单击 ---- */
+/* ---- 14. 单击/拖拽的判定阈值 ---- */
+// 阈值放宽到 12px：连点时手抖 5~10px 很常见，旧值 5px 会把猛点全判成拖拽，
+// 于是每一轮都变成 landed→idle，连撸计数永远是 0。
 m = mk(0.9);
 m.pressStart('body');
 eq('3px 不算拖拽', m.pressMove(3), false);
+eq('11px 仍不算拖拽', m.pressMove(11), false);
 m.pressEnd(50);
-eq('微小位移 = 单击', m.state, 'touch');
+eq('11px 松开 = 单击', m.state, 'touch');
+eq('单击确实计入连撸', m.touchStreak, 1);
+
+m = mk(0.9);
+m.pressStart('body');
+eq('13px 才算拖拽', m.pressMove(13), true);
+m.pressEnd(400);
+eq('拖拽释放 → landed', m.state, 'landed');
 
 /* ---- 15. 视觉与气泡从当前状态的素材池里取 ---- */
 m = mk(0.9);
@@ -163,6 +171,73 @@ eq('睡眠气泡为 💤', m.bubble, '💤');
 m = mk(0.9);
 m.force('不存在的状态');
 eq('force 到未知状态被忽略', m.state, 'idle');
+
+/* ---- 17. 过渡态里的点击也要计数 ---- */
+// 旧逻辑里 startled / landed 会吞掉点击，猛点时大半下数被动画吃掉
+m = mk(0.9);
+step(m, 5.2);
+click(m);
+eq('入睡后被点 → startled', m.state, 'startled');
+click(m);
+eq('惊醒中再点直接进入 touch', m.state, 'touch');
+eq('并开始计数（惊醒那一下不算撸）', m.touchStreak, 1);
+
+m = mk(0.9);
+m.pressStart('body'); m.pressMove(20); m.pressEnd(400);
+eq('拖拽释放 → landed', m.state, 'landed');
+click(m);
+eq('落地期间点击也计数', m.touchStreak, 1);
+eq('落地期间点击进入 touch', m.state, 'touch');
+
+/* ---- 18. 猛点：中途不松手也能翻脸 ---- */
+m = mk(0.9);
+rapid(m, 15);
+eq('猛点 15 下 → scratch', m.state, 'scratch');
+
+/* ---- 19. 菜单不变量：预览结束回到「菜单是否开着」 ---- */
+m = mk(0.9);
+m.openMenu();
+m.preview('scratch');
+eq('预览进入 scratch', m.state, 'scratch');
+step(m, 1.6);
+eq('菜单开着 → 预览结束回 menu', m.state, 'menu');
+eq('menuOpen 保持为真', m.menuOpen, true);
+
+m.closeMenu();
+eq('closeMenu → idle', m.state, 'idle');
+eq('menuOpen 复位', m.menuOpen, false);
+
+m.preview('play');
+step(m, 2.6);
+eq('菜单关着 → 预览结束回 idle', m.state, 'idle');
+
+// 没有 duration 的状态（sleep）也要能自己收尾
+m.openMenu();
+m.preview('sleep');
+step(m, BEH.preview_duration_sec + 0.2);
+eq('sleep 预览到点 → menu', m.state, 'menu');
+
+/* ---- 20. 预览不写任何交互计数 ---- */
+m.closeMenu();
+m.force('idle');
+m.preview('touch');
+eq('预览不累计连撸', m.touchStreak, 0);
+step(m, 1.6);
+eq('预览 touch 不会演化成 scratch', m.state, 'idle');
+
+/* ---- 21. 菜单开着时既不会溜达也不会睡着 ---- */
+m = mk(0.1);                       // 这个随机数会转 play
+m.openMenu();
+m.force('idle');                   // 人为制造"面板开着但状态是 idle"
+step(m, 8);
+eq('菜单开着时 idle 不分流', m.state, 'idle');
+
+/* ---- 22. 点猫收起菜单后，菜单状态必须一起消失 ---- */
+m = mk(0.9);
+m.openMenu();
+click(m);
+eq('点猫 → idle', m.state, 'idle');
+eq('menuOpen 同时复位', m.menuOpen, false);
 
 console.log(`\n通过 ${pass} / 失败 ${fail}`);
 process.exit(fail ? 1 : 0);

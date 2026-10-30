@@ -80,14 +80,19 @@
       }
     });
 
-    window.addEventListener('mouseup', () => {
+    function finishPress() {
       if (!drag.active) return;
       drag.active = false;
       const wasCarrying = machine._carrying;
       machine.pressEnd(performance.now() - drag.t0);
       if (native) post({ type: 'release', carried: wasCarrying });
       el.pet.classList.toggle('carrying', machine._carrying);
-    });
+    }
+
+    window.addEventListener('mouseup', finishPress);
+
+    // 兜底：应用失去焦点时收不到 mouseup，否则"按下"会卡住，之后所有点击都被吞掉
+    window.addEventListener('blur', finishPress);
 
     return { layoutHitboxes: layoutHitboxes };
   }

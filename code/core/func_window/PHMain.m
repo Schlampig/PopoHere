@@ -19,7 +19,7 @@
 #import "PHChecklist.h"
 
 static CGFloat const kPad = 16.0;             // 与 index.html 留白一致
-static CGFloat const kDragThreshold = 5.0;    // 超过这个位移才算拖拽
+static CGFloat const kDragThreshold = 12.0;   // 与 theme.behavior.click_max_drift_px 保持一致
 
 static NSString * const kSizeKey = @"PopoSize";
 static NSString * const kXKey = @"PopoX";
@@ -179,6 +179,11 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
 
     self.menuPanel = [[PHPanelController alloc] initWithView:@"menu"];
     self.menuPanel.onAction = ^(NSString *action, id value) { [weakSelf performAction:action value:value]; };
+    // 菜单面板的显示/收起是「menu 状态」的唯一真相：不管是右键弹的、菜单栏
+    // 点开的，还是切到提醒/待办视图，都从这里进出一遍，状态机跟着走。
+    self.menuPanel.onShow = ^{
+        [weakSelf.web evaluateJavaScript:@"App.menuOpened && App.menuOpened();" completionHandler:nil];
+    };
     self.menuPanel.onHide = ^{
         [weakSelf.web evaluateJavaScript:@"App.menuClosed && App.menuClosed();" completionHandler:nil];
     };
@@ -246,6 +251,9 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
         [self endPress];
     } else if ([type isEqualToString:@"jserror"]) {
         NSLog(@"PopoHere JS 异常: %@", b[@"message"]);
+    } else if ([type isEqualToString:@"menuPanelClose"]) {
+        // 状态机已经离开 menu（例如点猫），面板必须跟着收，保证两者同生共死
+        if (self.menuPanel.isShown) [self.menuPanel hide];
     } else if ([type isEqualToString:@"openMenu"]) {
         [self openMenuAtX:[b[@"x"] doubleValue] y:[b[@"y"] doubleValue]];
     } else if ([type isEqualToString:@"hidden"]) {
@@ -347,9 +355,7 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
     CGFloat screenHeight = [NSScreen mainScreen].frame.size.height;
     NSPoint p = NSMakePoint(x, screenHeight - y);   // JS 的 y 从顶部算
     [self pushSnapshotToPanels];
-    [self.menuPanel showAtPoint:p];
-    // 面板真正显示出来之后，才让猫进入 menu 状态
-    [self.web evaluateJavaScript:@"App.menuOpened()" completionHandler:nil];
+    [self.menuPanel showAtPoint:p];   // 显示 → onShow → App.menuOpened()
 }
 
 #pragma mark - 动作分发（菜单栏与玻璃面板共用）
@@ -432,8 +438,9 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
         [self confirmClearTodos];
 
     } else if ([action isEqualToString:@"forceState"]) {
+        // 预览：演一遍就回来。回到 menu 还是 idle 由状态机检查菜单面板是否真的开着
         [self.web evaluateJavaScript:
-            [NSString stringWithFormat:@"App.force('%@')", value] completionHandler:nil];
+            [NSString stringWithFormat:@"App.preview('%@')", value] completionHandler:nil];
 
     } else if ([action isEqualToString:@"closePanel"]) {
         [self.menuPanel hide];
@@ -635,7 +642,7 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
 
     // 版本号与实时状态要从包信息和 Web 里拿
     snap[@"version"] = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"2.0.0";
-    [self.web evaluateJavaScript:@"JSON.stringify({state: App.state(), elapsed: +App.elapsed().toFixed(1)})"
+    [self.web evaluateJavaScript:@"JSON.stringify({state: App.state(), elapsed: +App.elapsed().toFixed(1), streak: App.streak(), threshold: App.threshold()})"
                completionHandler:^(id result, NSError *error) {
         if ([result isKindOfClass:[NSString class]] && [(NSString *)result length]) {
             NSData *data = [(NSString *)result dataUsingEncoding:NSUTF8StringEncoding];
@@ -738,6 +745,44 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
                        dispatch_get_main_queue(), ^{
             if ([qa isEqualToString:@"status"]) [self showStatusPanel];
             if ([qa isEqualToString:@"menu"]) [self openMenuAtX:200 y:300];
+        });
+    }
+
+    // QA 钩子：POPOHERE_QA_SEQ=1 跑一遍「菜单开着 → 状态预览 → 该回哪」的回归
+    if (getenv("POPOHERE_QA_SEQ")) [self runQASequence];
+}
+
+- (void)logJSState:(NSString *)tag {
+    [self.web evaluateJavaScript:@"App.state() + ' streak=' + App.streak() + ' menuOpen=' + App.menuOpen()"
+               completionHandler:^(id r, NSError *e) { NSLog(@"[QA] %@ -> %@", tag, r ?: e); }];
+}
+
+- (void)runQASequence {
+    __weak typeof(self) weakSelf = self;
+    struct { double at; NSString *what; } steps[] = {
+        {1.0, @"open"}, {1.6, @"log:菜单打开后"}, {2.2, @"preview"}, {2.8, @"log:预览开始"},
+        {8.8, @"log:预览应已结束"}, {9.2, @"clickCat"}, {9.8, @"log:点猫之后"},
+    };
+    for (int i = 0; i < 7; i++) {
+        double at = steps[i].at;
+        NSString *w = steps[i].what;          // 先取出来，block 不能捕获 C 数组
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(at * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            if (!self) return;
+            if ([w isEqualToString:@"open"]) { [self openMenuAtX:400 y:300]; }
+            else if ([w isEqualToString:@"preview"]) {
+                [self.web evaluateJavaScript:@"App.preview('sleep')" completionHandler:nil];
+            }
+            else if ([w isEqualToString:@"clickCat"]) {
+                // 模拟一次真实单击：走完整的 JS 输入 → 状态机 → 原生联动
+                [self.web evaluateJavaScript:
+                    @"(function(){var p=document.getElementById('pet');"
+                     "p.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,button:0,screenX:10,screenY:10}));"
+                     "window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0,screenX:10,screenY:10}));"
+                     "})()" completionHandler:nil];
+            }
+            else if ([w hasPrefix:@"log:"]) { [self logJSState:[w substringFromIndex:4]]; }
         });
     }
 }

@@ -31,7 +31,17 @@
 
   if (NATIVE) document.body.classList.add('native');
 
-  const machine = new Popo.PetStateMachine(THEME);
+  const machine = new Popo.PetStateMachine(THEME, {
+    onTransition: (from, to) => {
+      // 离开 menu 就一定让外壳把面板收掉。不能只依赖"面板失焦自己隐藏"：
+      // 点猫时状态可能先走、面板还留在屏幕上，又变成两边不同步。
+      // 例外是状态预览：菜单可以开着让用户逐个试状态，预览结束还会回 menu。
+      if (from === 'menu' && to !== 'menu' && !machine.previewing) {
+        post({ type: 'menuPanelClose' });
+      }
+    },
+    onPausedClick: () => renderer.flashBubble('已暂停互动 · 菜单栏里可恢复', 1600),
+  });
 
   let petSize = NATIVE ? Math.max(60, window.innerWidth - 16) : 230;
   let lastFrame = performance.now();
@@ -174,8 +184,12 @@
     menuClosed: () => menu.notifyClosed(),
     setSize: setSize,
     force: (state) => machine.force(state),
+    preview: (state) => machine.preview(state),
     state: () => machine.state,
     elapsed: () => machine.elapsed,
+    streak: () => machine.touchStreak,
+    threshold: () => BEH.touch_scratch_threshold,
+    menuOpen: () => machine.menuOpen,
   };
 
   if (NATIVE) post({ type: 'ready' });

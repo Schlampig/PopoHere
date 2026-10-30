@@ -138,8 +138,12 @@
   .st.cur .ring{ background:var(--accent); border-color:var(--accent); }
   .st .cn{ flex:1; font-size:12.5px; }
   .st .id{ color:var(--text-2); font-size:11px; font-variant-numeric:tabular-nums; }
-  .foot{ display:flex; justify-content:space-between; padding:6px 8px 2px;
+  .foot{ display:flex; align-items:center; gap:8px; padding:6px 8px 2px;
          color:var(--text-2); font-size:11px; font-variant-numeric:tabular-nums; }
+  .foot #ftTime{ margin-left:auto; }
+  /* 连撸计数：让"撸几下会翻脸"变成看得见的反馈，而不是玄学 */
+  .foot #ftStreak{ color:var(--accent); opacity:0; transition:opacity .12s ease; }
+  .foot #ftStreak.on{ opacity:1; }
 </style>
 </head>
 <body data-view="menu">
@@ -217,7 +221,11 @@
     <div class="sep"></div>
     <div id="stateList"></div>
     <div class="sep"></div>
-    <div class="foot"><span id="ftState">—</span><span id="ftTime">0.0s</span></div>
+    <div class="foot">
+      <span id="ftState">—</span>
+      <span id="ftStreak"></span>
+      <span id="ftTime">0.0s</span>
+    </div>
   </div>
 
 </div>
@@ -322,6 +330,12 @@
       </div>`).join('');
     document.getElementById('ftState').textContent = snapshot.state;
     document.getElementById('ftTime').textContent = (snapshot.elapsed || 0).toFixed(1) + 's';
+
+    const streak = snapshot.streak || 0;
+    const threshold = snapshot.threshold || 10;
+    const fs = document.getElementById('ftStreak');
+    fs.textContent = streak >= 2 ? `连撸 ${streak}/${threshold}` : '';
+    fs.classList.toggle('on', streak >= 2);
   }
 
   function render() {
@@ -393,7 +407,7 @@
     snapshot = {
       size: 220, sound: false, soundAvailable: false, paused: true, autostart: false,
       petHidden: false, statusOpen: true, version: '2.0.0',
-      state: 'idle', elapsed: 3.2,
+      state: 'touch', elapsed: 1.2, streak: 7, threshold: 10,
       states: [
         { id: 'idle', cn: '静息' }, { id: 'touch', cn: '被撸' }, { id: 'scratch', cn: '挠人' },
         { id: 'play', cn: '自娱' }, { id: 'sleep', cn: '睡觉' }, { id: 'startled', cn: '惊醒' },

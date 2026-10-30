@@ -26,6 +26,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy) void (^onAction)(NSString *action, id _Nullable value);
 /** 面板真正收起时（菜单需要让状态机回到 idle） */
 @property (nonatomic, copy) void (^onHide)(void);
+/** 面板真正显示后（菜单需要让状态机进入 menu） */
+@property (nonatomic, copy) void (^onShow)(void);
 /** 开始拖动面板（状态面板的标题栏） */
 @property (nonatomic, copy) void (^onDragStart)(void);
 

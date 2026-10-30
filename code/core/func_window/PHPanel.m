@@ -98,6 +98,7 @@
 
     [self.window setFrame:NSMakeRect(x, y, size.width, size.height) display:YES];
     [self.window makeKeyAndOrderFront:nil];
+    if (self.onShow) self.onShow();
 }
 
 - (void)showAtBottomRight {
@@ -109,6 +110,7 @@
     CGFloat y = NSMinY(vis);
     [self.window setFrame:NSMakeRect(x, y, size.width, size.height) display:YES];
     [self.window orderFront:nil];                // 不抢焦点
+    if (self.onShow) self.onShow();
 }
 
 /** 尺寸变了：菜单保持左上角不动，状态面板保持贴右下角；两者都不许跑出屏幕 */

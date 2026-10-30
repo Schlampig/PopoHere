@@ -44,9 +44,10 @@ BEHAVIOR_DEFAULTS = {
     "touch_repeat_window_sec": 4,
     "touch_scratch_threshold": 10,
     "scratch_cooldown_sec": 6,
-    "click_max_drift_px": 5,
+    "click_max_drift_px": 12,   # 与外壳 kDragThreshold 一致；5px 太紧，连点会被误判成拖拽
     "click_max_duration_ms": 300,
     "menu_timeout_sec": 120,   # 仅作兜底；菜单开着时不应自动睡
+    "preview_duration_sec": 6,  # 状态面板预览：没有 duration 的状态演多久
 }
 
 # 单一命中区：整只猫都是"撸它"

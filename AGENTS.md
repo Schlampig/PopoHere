@@ -103,9 +103,10 @@ python3 code/prepare/make_placeholder_assets.py
 python3 code/build/build_web.py
 open code/build/out/preview.html          # 浏览器里带调试面板
 
-# 测试（改了状态机 / 拖拽 必跑，两条都要绿）
-node code/test/state_machine_test.js      # 32 条
-python3 code/test/drag_tracking_test.py   # 7 条，需要本机有 Google Chrome
+# 测试（改了状态机 / 输入 必跑，三条都要绿；后两条需要本机有 Google Chrome）
+node code/test/state_machine_test.js      # 60 条，纯逻辑
+python3 code/test/click_mash_test.py      # 9 条，连点翻脸（跑真实产物 + DOM 事件）
+python3 code/test/drag_tracking_test.py   # 7 条，拖拽跟手
 
 # 重新生成应用图标
 python3 code/build/make_icon.py
@@ -113,6 +114,10 @@ python3 code/build/make_icon.py
 # 构建 app（通用二进制 + ad-hoc 重签名 + 校验）
 ./code/build/build_app.sh
 ./code/build/build_app.sh --run
+
+# 端到端自检：开菜单 → 预览 sleep → 应回 menu → 点猫 → 应回 idle 且面板收起
+# （结果在 stderr，用 ./PopoHere 2>&1 | grep "\[QA\]" 看）
+POPOHERE_QA_SEQ=1 code/build/dist/PopoHere.app/Contents/MacOS/PopoHere
 
 # 打包发布 zip
 python3 code/build/package_release.py
@@ -154,14 +159,27 @@ JS 用 `clientX` 算位移 + `postMessage` 移动窗口会形成**坐标系反�
 ## 状态机规则（v2.0）
 
 1. 状态：`idle` / `touch` / `scratch` / `play` / `sleep` / `dragging` / `menu` + `startled` / `landed`
-2. `startled` 只能从 `sleep` 被点击/拖拽时进入；睡中被拖 → `startled` 播完若手还按着 → `dragging`
-3. `dragging` 是跨状态模态行为，释放后进 `landed`，不回原状态
-4. `play` 被点击 → 直接回 `idle`（打断），**不**进入 `touch`
-5. `menu` 状态下忽略左键；8 秒兜底回 `idle`
-6. 单击判定：位移 < 5px **且** 时长 < 300ms
-7. 连撸：进入 `touch` 时按 `touch_repeat_window_sec`（4s）累计 `touchStreak`，达 `touch_scratch_threshold`（10）→ `scratch`；`scratch` 后冷却 6s，期间不翻脸
-8. `touch` 播放中继续点击 = 重播并 +1 连击（否则连点 10 下只记 1 下）
-9. 坑：连击必须在「进入 touch 那一刻」算间隔，不能在结束时算
+2. **所有"播完"只有一个出口 `_rest()`**：`menuOpen ? menu : idle`。任何 `_goto('idle')` 的
+   写法都会重新引入"面板还开着、猫已经在 idle 起步"的 bug。`menuOpen` 只由外壳在面板
+   `show` / `hide` 回调里写入（`App.menuOpened()` / `App.menuClosed()`）
+3. 离开 `menu` 时外壳必须收起面板：`main.js` 的 `onTransition` 会发 `menuPanelClose`。
+   不能只靠"面板失焦自己隐藏"——点猫时状态可能先走、面板还留着
+4. 状态面板点状态名 = `preview()`：只演一遍、不写连撸计数，演完走 `_rest()`；
+   预览期间**不能**触发 `menuPanelClose`（菜单要开着让人逐个试）
+5. `startled` 只能从 `sleep` 被点击/拖拽时进入；睡中被拖 → `startled` 播完若手还按着 → `dragging`
+6. `dragging` 是跨状态模态行为，释放后进 `landed`，不回原状态
+7. `play` 被点击 → 直接回 `idle`（打断），**不**进入 `touch`
+8. `menu` 开着时 `idle` 不分流（不会溜达/睡着）；兜底超时 `menu_timeout_sec`（120s）
+   触发时同时清 `menuOpen`，否则 `_rest()` 会又回到 menu，永远出不来
+9. 单击判定：位移 < `click_max_drift_px`（**12**，与外壳 `kDragThreshold` 一致）**且** 时长 < 300ms
+10. 连撸：进入 `touch` 时按 `touch_repeat_window_sec`（4s）累计 `touchStreak`，
+    达 `touch_scratch_threshold`（10）**当场**转 `scratch`，不等 touch 播完；
+    `scratch` 后冷却 6s，期间不翻脸
+11. `touch` 播放中继续点击 = 重播并 +1 连击；`startled` / `landed` 里的点击也计数
+    （否则一轮猛点会被过渡动画吃掉大半，用户以为坏了）
+12. 坑：连击必须在「进入 touch 那一刻」算间隔，不能在结束时算
+13. 坑：`click_max_drift_px` 曾是 5px，实测连点时手抖 6–10px 就会判成拖拽，
+    于是每一下都变成 `dragging → landed → idle`，计数永远是 0 —— 别调回去
 
 ## 已知短板
 

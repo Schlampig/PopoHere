@@ -8,9 +8,10 @@
     "touch_repeat_window_sec": 4,
     "touch_scratch_threshold": 10,
     "scratch_cooldown_sec": 6,
-    "click_max_drift_px": 5,
+    "click_max_drift_px": 12,
     "click_max_duration_ms": 300,
-    "menu_timeout_sec": 120
+    "menu_timeout_sec": 120,
+    "preview_duration_sec": 6
   },
   "states": {
     "idle": {
