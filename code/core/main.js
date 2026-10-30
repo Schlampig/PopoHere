@@ -16,9 +16,7 @@
     pet: document.getElementById('pet'),
     img: document.getElementById('petImg'),
     bubble: document.getElementById('bubble'),
-    hbHead: document.getElementById('hbHead'),
-    hbPaw: document.getElementById('hbPaw'),
-    ctx: document.getElementById('ctx'),
+    hbBody: document.getElementById('hbBody'),
     vState: document.getElementById('vState'),
     vElapsed: document.getElementById('vElapsed'),
     vCool: document.getElementById('vCool'),
@@ -45,6 +43,10 @@
       window.webkit.messageHandlers.popo.postMessage(msg);
     }
   }
+
+  window.addEventListener('error', (e) => {
+    post({ type: 'jserror', message: String(e.message) + ' @ ' + e.filename + ':' + e.lineno });
+  });
 
   /* ---- 原型专用：日志 ---- */
   const logs = [];
@@ -87,12 +89,8 @@
     el: el,
     machine: machine,
     post: post,
-    getDefaultPos: defaultPos,
-    setPos: setPos,
-    onTogglePause: () => {
-      machine.paused = !machine.paused;
-      post({ type: 'paused', value: machine.paused });
-    },
+    native: NATIVE,
+    log: log,
   });
 
   function setSize(px) {
@@ -167,10 +165,13 @@
       post({ type: 'paused', value: machine.paused });
       return machine.paused;
     },
-    show: (v) => menu.setHidden(!v),
+    show: (v) => { el.pet.classList.toggle('hidden', !v); },
+    notify: (text, ms) => renderer.flashBubble(text, ms),
+    menuClosed: () => menu.notifyClosed(),
     setSize: setSize,
     force: (state) => machine.force(state),
     state: () => machine.state,
+    elapsed: () => machine.elapsed,
   };
 
   if (NATIVE) post({ type: 'ready' });

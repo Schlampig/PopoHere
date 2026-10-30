@@ -1,6 +1,8 @@
-/* 状态机单元测试：直接跑 code/core/func_state/state_machine.js（纯逻辑，不依赖 DOM）
+/* 状态机单元测试（v2.0）
  *
  *   node code/test/state_machine_test.js
+ *
+ * 纯逻辑测试：不依赖 DOM、不依赖浏览器。
  */
 const fs = require('fs');
 const path = require('path');
@@ -14,64 +16,148 @@ const sandbox = {};
 new Function('globalThis', fs.readFileSync(SRC, 'utf8'))(sandbox);
 const PetStateMachine = sandbox.Popo.PetStateMachine;
 
-let pass=0,fail=0;
-function eq(label,got,want){ if(got===want){pass++;} else {fail++; console.log(`FAIL ${label}: got ${got}, want ${want}`);} }
-const mk=(r=0.5)=>new PetStateMachine(THEME,{random:()=>r});
-const step=(m,sec,dt=0.1)=>{for(let t=0;t<sec;t+=dt)m.tick(dt);};
-const click=(m,region)=>{m.pressStart(region);m.pressEnd(100);};
-const drag=(m)=>{m.pressStart('head');return m.pressMove(10);};
+let pass = 0, fail = 0;
+function eq(label, got, want) {
+  if (got === want) { pass++; }
+  else { fail++; console.log(`FAIL ${label}: got ${got}, want ${want}`); }
+}
 
-// 1. idle 5s -> walk(rand<0.3) / sleep(rand>=0.3)
-let m=mk(0.1); step(m,5.2); eq('idle->walk',m.state,'walk');
-m=mk(0.9); step(m,5.2); eq('idle->sleep',m.state,'sleep');
+const mk = (r = 0.5) => new PetStateMachine(THEME, { random: () => r });
+const step = (m, sec, dt = 0.1) => { for (let t = 0; t < sec; t += dt) m.tick(dt); };
+const click = (m) => { m.pressStart('body'); m.pressEnd(100); };
+const rapid = (m, n) => { for (let i = 0; i < n; i++) click(m); };
+const drag = (m) => { m.pressStart('body'); return m.pressMove(10); };
 
-// 2. walk 播完 -> idle
-m=mk(0.1); step(m,5.2); step(m,2.6); eq('walk->idle',m.state,'idle');
+const BEH = THEME.behavior;
 
-// 3. idle 点脚 -> pet_paw -> idle(rand>=0.3 且不连续)
-m=mk(0.9); click(m,'paw'); eq('idle点脚->pet_paw',m.state,'pet_paw'); step(m,1.1); eq('pet_paw->idle',m.state,'idle');
+/* ---- 1. idle 分流 ---- */
+// random 固定 0.1 < 0.35 → play
+let m = mk(0.1);
+step(m, 5.2);
+eq('idle 满 5s → play', m.state, 'play');
 
-// 4. 3秒内连续摸脚 -> scratch
-m=mk(0.9); click(m,'paw'); step(m,1.1); click(m,'paw'); step(m,1.1); eq('连续摸脚->scratch',m.state,'scratch');
-// scratch 结束进冷却，冷却内摸脚不再挠
-step(m,1.6); eq('scratch->idle',m.state,'idle');
-click(m,'paw'); step(m,1.1); eq('冷却内摸脚->idle',m.state,'idle');
+// random 固定 0.9 > 0.35 → sleep
+m = mk(0.9);
+step(m, 5.2);
+eq('idle 满 5s → sleep', m.state, 'sleep');
 
-// 5. 睡觉被点 -> startled -> idle
-m=mk(0.9); step(m,5.2); eq('sleep',m.state,'sleep'); click(m,'head'); eq('sleep被点->startled',m.state,'startled'); step(m,1.1); eq('startled->idle',m.state,'idle');
+/* ---- 2. play 播完回 idle ---- */
+m = mk(0.1);
+step(m, 5.2);
+step(m, 2.6);
+eq('play 播完 → idle', m.state, 'idle');
 
-// 6. 睡中被拖 -> startled -> dragging -> 释放 -> landed -> idle
-m=mk(0.9); step(m,5.2); let carrying=drag(m); eq('睡中拖->startled',m.state,'startled'); eq('拖=carrying',carrying,true);
-step(m,1.1); eq('startled->dragging',m.state,'dragging');
-m.pressEnd(100); eq('释放->landed',m.state,'landed'); step(m,0.9); eq('landed->idle',m.state,'idle');
+/* ---- 3. 单击进入 touch ---- */
+m = mk(0.9);
+click(m);
+eq('idle 单击 → touch', m.state, 'touch');
 
-// 7. idle 拖拽 -> dragging -> landed
-m=mk(0.9); carrying=drag(m); eq('idle拖->dragging',m.state,'dragging'); m.pressEnd(100); eq('释放->landed',m.state,'landed');
+/* ---- 4. touch 播完回 idle（未达阈值） ---- */
+step(m, 1.6);
+eq('touch 播完 → idle', m.state, 'idle');
+eq('连撸计数为 1', m.touchStreak, 1);
 
-// 8. 走动中被点 -> 打断回 idle
-m=mk(0.1); step(m,5.2); click(m,'head'); eq('walk被点->idle',m.state,'idle');
+/* ---- 5. 连撸 9 次还不翻脸 ---- */
+m = mk(0.9);
+rapid(m, 9);
+eq('连点 9 次仍停在 touch', m.state, 'touch');
+eq('连撸计数 9', m.touchStreak, 9);
+step(m, 1.6);
+eq('9 次未达阈值 → idle', m.state, 'idle');
 
-// 9. idle 点头 -> pet_head -> idle
-m=mk(0.9); click(m,'head'); eq('idle点头->pet_head',m.state,'pet_head'); step(m,1.6); eq('pet_head->idle',m.state,'idle');
+/* ---- 6. 第 10 次翻脸 ---- */
+rapid(m, 1);                       // 第 10 次（间隔仍在窗口内）
+eq('第 10 次进入 touch', m.touchStreak, 10);
+step(m, 1.6);
+eq('10 次达阈值 → scratch', m.state, 'scratch');
 
-// 10. 空白区：无响应
-m=mk(0.9); let hook=0; m.onBlankClick=()=>hook++; click(m,'blank'); eq('空白区无切换',m.state,'idle'); eq('钩子被调用',hook,1);
+/* ---- 7. scratch 结束进冷却，冷却期内不再翻脸 ---- */
+step(m, 1.6);
+eq('scratch 播完 → idle', m.state, 'idle');
+eq('连撸计数已清零', m.touchStreak, 0);
+rapid(m, 12);                      // 冷却期内疯狂点
+step(m, 1.6);
+eq('冷却期内连点不翻脸', m.state, 'idle');
 
-// 11. 短时状态被点：忽略
-m=mk(0.9); click(m,'head'); click(m,'paw'); eq('pet_head中点击忽略',m.state,'pet_head');
+// 冷却过去后再点 10 次，恢复翻脸
+step(m, BEH.scratch_cooldown_sec + 0.5);
+m.force('idle');                   // 这段时间里猫可能已经睡着了，先拉回 idle
+rapid(m, 10);
+step(m, 1.6);
+eq('冷却结束后可再次翻脸', m.state, 'scratch');
 
-// 12. menu 状态 + 2s 兜底
-m=mk(0.9); m.openMenu(); eq('openMenu',m.state,'menu'); click(m,'head'); eq('menu中点击忽略',m.state,'menu'); step(m,2.1); eq('menu兜底->idle',m.state,'idle');
+/* ---- 8. 睡中被点 → startled → idle ---- */
+m = mk(0.9);
+step(m, 5.2);
+eq('已入睡', m.state, 'sleep');
+click(m);
+eq('睡中被点 → startled', m.state, 'startled');
+step(m, 1.1);
+eq('startled 播完 → idle', m.state, 'idle');
 
-// 13. 暂停互动：不响应点击和拖拽
-m=mk(0.9); m.paused=true; click(m,'head'); eq('暂停点头无反应',m.state,'idle');
-m.pressStart('head'); eq('暂停拖拽无反应',m.pressMove(20),false);
+/* ---- 9. 睡中被拖 → startled → dragging → 释放 → landed ---- */
+m = mk(0.9);
+step(m, 5.2);
+drag(m);
+eq('睡中被拖 → startled', m.state, 'startled');
+step(m, 1.1);
+eq('手还按着 → dragging', m.state, 'dragging');
+m.pressEnd(100);
+eq('释放 → landed', m.state, 'landed');
+step(m, 0.9);
+eq('landed 播完 → idle', m.state, 'idle');
 
-// 14. 长按不算单击
-m=mk(0.9); m.pressStart('head'); m.pressEnd(500); eq('长按忽略',m.state,'idle');
+/* ---- 10. 玩到一半被点只是打断，不进入 touch ---- */
+m = mk(0.1);
+step(m, 5.2);
+eq('处于 play', m.state, 'play');
+click(m);
+eq('play 中点击 → idle', m.state, 'idle');
 
-// 15. 位移<5px 不算拖拽
-m=mk(0.9); m.pressStart('head'); eq('小位移不拖',m.pressMove(3),false); m.pressEnd(50); eq('小位移=单击',m.state,'pet_head');
+/* ---- 11. menu 状态与 8 秒兜底 ---- */
+m = mk(0.9);
+m.openMenu();
+eq('openMenu → menu', m.state, 'menu');
+click(m);
+eq('menu 中点击无效', m.state, 'menu');
+step(m, BEH.menu_timeout_sec + 0.2);
+eq('menu 超时 → idle', m.state, 'idle');
+
+/* ---- 12. 暂停互动 ---- */
+m = mk(0.9);
+m.paused = true;
+click(m);
+eq('暂停时点击无反应', m.state, 'idle');
+m.pressStart('body');
+eq('暂停时拖拽无反应', m.pressMove(30), false);
+
+/* ---- 13. 长按不算单击 ---- */
+m = mk(0.9);
+m.pressStart('body');
+m.pressEnd(500);
+eq('长按不触发 touch', m.state, 'idle');
+
+/* ---- 14. 微小位移仍算单击 ---- */
+m = mk(0.9);
+m.pressStart('body');
+eq('3px 不算拖拽', m.pressMove(3), false);
+m.pressEnd(50);
+eq('微小位移 = 单击', m.state, 'touch');
+
+/* ---- 15. 视觉与气泡从当前状态的素材池里取 ---- */
+m = mk(0.9);
+click(m);
+eq('视觉来自 touch 素材池', THEME.states.touch.visuals.includes(m.visual), true);
+eq('气泡来自 touch 气泡池', THEME.states.touch.bubbles.includes(m.bubble), true);
+
+m = mk(0.9);
+step(m, 5.2);
+eq('睡眠气泡为 💤', m.bubble, '💤');
+
+/* ---- 16. 缺失状态的容错 ---- */
+m = mk(0.9);
+m.force('不存在的状态');
+eq('force 到未知状态被忽略', m.state, 'idle');
 
 console.log(`\n通过 ${pass} / 失败 ${fail}`);
-process.exit(fail?1:0);
+process.exit(fail ? 1 : 0);

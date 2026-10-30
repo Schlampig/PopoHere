@@ -70,15 +70,15 @@ try {
 
   // 纯单击（屏幕坐标完全不动）必须走互动分支，不能被当成拖拽
   window.App.force('idle');
-  // 判定框默认 hidden，getBoundingClientRect 是 0，所以按 theme 的相对坐标算头心。
-  // POPO_THEME 是 const 声明的全局词法绑定，不在 window 上，直接裸引用。
-  const hb = POPO_THEME.hitBoxes.head;
+  // 判定框默认 hidden，getBoundingClientRect 是 0，所以按 theme 的相对坐标算中心。
+  // v2.0 起只有一个 body 命中区。POPO_THEME 是 const 全局词法绑定，不在 window 上，裸引用。
+  const hb = POPO_THEME.hitBoxes.body;
   const pr2 = pet.getBoundingClientRect();
   const cx2 = pr2.left + (hb.x + hb.w / 2) * pr2.width;
   const cy2 = pr2.top + (hb.y + hb.h / 2) * pr2.height;
   pet.dispatchEvent(ev('mousedown', cx2, cy2, 900, 900));
   window.dispatchEvent(ev('mouseup', cx2, cy2, 900, 900));
-  ok('纯单击头部 -> pet_head（未被当成拖拽）', S(), 'pet_head');
+  ok('纯单击 -> touch（未被当成拖拽）', S(), 'touch');
 
   report(out);
 } catch (e) {

@@ -15,6 +15,8 @@
     const onTransition = opts.onTransition || function () {};
 
     let renderedState = null;
+    let overrideBubble = null;      // 定时提醒等外部消息临时占用气泡
+    let overrideUntil = 0;
 
     function paintPet() {
       const spec = machine.spec();
@@ -22,7 +24,7 @@
       if (el.img && url) el.img.src = url;
       if (el.img) el.img.className = 'm-' + (spec.motion || 'none');
 
-      const bubble = spec.bubble;
+      const bubble = overrideBubble || machine.bubble;   // 外部消息优先
       if (el.bubble) {
         el.bubble.textContent = bubble || '';
         el.bubble.classList.toggle('on', !!bubble);
@@ -40,7 +42,21 @@
       if (el.vPause) el.vPause.textContent = machine.paused ? '是' : '否';
     }
 
+    function flashBubble(text, ms) {
+      overrideBubble = text;
+      overrideUntil = performance.now() + (ms || 4000);
+      if (el.bubble) {
+        el.bubble.textContent = text;
+        el.bubble.classList.add('on');
+        el.bubble.classList.remove('float');
+      }
+    }
+
     function render() {
+      if (overrideBubble && performance.now() > overrideUntil) {
+        overrideBubble = null;
+        renderedState = null;      // 逼下一帧重画气泡
+      }
       const st = machine.state;
       if (st !== renderedState) {
         onTransition(renderedState, st);
@@ -52,7 +68,7 @@
       paintDebug();
     }
 
-    return { render: render };
+    return { render: render, flashBubble: flashBubble };
   }
 
   root.Popo.createRenderer = createRenderer;

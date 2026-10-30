@@ -1,93 +1,127 @@
 {
   "id": "popo",
   "displayName": "Popo",
-  "version": "0.1",
-  "canvas": 640,
-
+  "version": "2.0",
   "behavior": {
     "idle_duration_sec": 5,
-    "walk_probability": 0.30,
-    "scratch_probability": 0.30,
-    "scratch_cooldown_sec": 3,
-    "repeat_paw_window_sec": 3,
+    "idle_to_play_probability": 0.35,
+    "touch_repeat_window_sec": 4,
+    "touch_scratch_threshold": 10,
+    "scratch_cooldown_sec": 6,
     "click_max_drift_px": 5,
     "click_max_duration_ms": 300,
-    "menu_timeout_sec": 2,
-    "polling_interval_ms": 50
+    "menu_timeout_sec": 8
   },
-
   "states": {
     "idle": {
-      "visuals": ["idle.png"],
+      "visuals": [
+        "idle_1.png",
+        "idle_2.png",
+        "idle_3.png",
+        "idle_4.png"
+      ],
       "loop": true,
-      "fps": 1,
-      "motion": "breathe"
+      "motion": "breathe",
+      "duration": null
     },
-    "walk": {
-      "visuals": ["walk.png"],
-      "loop": true,
-      "fps": 1,
-      "duration": 2.5,
-      "motion": "bob-walk",
-      "next": "idle"
-    },
-    "sleep": {
-      "visuals": ["sleep.png"],
-      "loop": true,
-      "fps": 1,
-      "bubble": "💤",
-      "motion": "breathe-slow"
-    },
-    "pet_head": {
-      "visuals": ["pet_head.png"],
+    "touch": {
+      "visuals": [
+        "touch_1.png",
+        "touch_2.png",
+        "touch_3.png",
+        "touch_4.png",
+        "touch_5.png",
+        "touch_6.png"
+      ],
       "loop": false,
+      "motion": "none",
       "duration": 1.5,
-      "bubble": "❤️",
-      "motion": "none"
-    },
-    "pet_paw": {
-      "visuals": ["pet_paw.png"],
-      "loop": false,
-      "duration": 1.0,
-      "bubble": "❗",
-      "motion": "none"
+      "bubbles": [
+        "❤️",
+        "😌",
+        "✨"
+      ]
     },
     "scratch": {
-      "visuals": ["scratch.png"],
+      "visuals": [
+        "scratch_1.png",
+        "scratch_2.png",
+        "scratch_3.png"
+      ],
       "loop": false,
+      "motion": "shake",
       "duration": 1.5,
-      "bubble": "💢",
-      "motion": "shake"
+      "bubble": "💢"
     },
-    "startled": {
-      "visuals": ["startled.png"],
+    "play": {
+      "visuals": [
+        "play_1.png",
+        "play_2.png",
+        "play_3.png",
+        "play_4.png",
+        "play_5.png",
+        "play_6.png"
+      ],
       "loop": false,
-      "duration": 1.0,
-      "bubble": "😲",
-      "motion": "shake"
+      "motion": "bob-walk",
+      "duration": 2.5
+    },
+    "sleep": {
+      "visuals": [
+        "sleep_1.png",
+        "sleep_2.png",
+        "sleep_3.png",
+        "sleep_4.png"
+      ],
+      "loop": true,
+      "motion": "breathe-slow",
+      "duration": null,
+      "bubble": "💤"
     },
     "dragging": {
-      "visuals": ["dragging.png"],
+      "visuals": [
+        "dragging_1.png",
+        "dragging_2.png"
+      ],
       "loop": true,
-      "fps": 1,
-      "motion": "none"
-    },
-    "landed": {
-      "visuals": ["landed.png"],
-      "loop": false,
-      "duration": 0.8,
-      "motion": "drop"
+      "motion": "none",
+      "duration": null
     },
     "menu": {
-      "visuals": ["menu.png"],
+      "visuals": [
+        "menu_1.png",
+        "menu_2.png"
+      ],
       "loop": true,
-      "fps": 1,
-      "motion": "none"
+      "motion": "none",
+      "duration": null
+    },
+    "startled": {
+      "visuals": [
+        "startled_1.png",
+        "startled_2.png"
+      ],
+      "loop": false,
+      "motion": "shake",
+      "duration": 1.0,
+      "bubble": "❗"
+    },
+    "landed": {
+      "visuals": [
+        "landed_1.png",
+        "landed_2.png"
+      ],
+      "loop": false,
+      "motion": "drop",
+      "duration": 0.8
     }
   },
-
   "hitBoxes": {
-    "head": { "x": 0.26, "y": 0.02, "w": 0.48, "h": 0.46 },
-    "paw": { "x": 0.08, "y": 0.52, "w": 0.84, "h": 0.48 }
+    "body": {
+      "x": 0.04,
+      "y": 0.04,
+      "w": 0.92,
+      "h": 0.92
+    }
   }
 }

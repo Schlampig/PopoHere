@@ -22,7 +22,7 @@ import tempfile
 from PIL import Image
 
 CODE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # code/
-DEFAULT_SRC = os.path.join(CODE, "pet_images", "landed.png")
+DEFAULT_SRC = os.path.join(CODE, "pet_images", "logo_1.png")
 OUT = os.path.join(CODE, "pet_others", "AppIcon.icns")
 
 # iconset 需要的尺寸：(输出名, 像素边长)

@@ -15,7 +15,14 @@ ROOT="$(dirname "$CODE_DIR")"                       # 仓库根
 
 APP="$BUILD_DIR/dist/PopoHere.app"
 CONTENTS="$APP/Contents"
-SHELL_SRC="$CODE_DIR/core/func_window"
+SHELL_DIR="$CODE_DIR/core/func_window"
+SOURCES=(
+  "$SHELL_DIR/PHMain.m"
+  "$SHELL_DIR/PHPanel.m"
+  "$CODE_DIR/core/func_reminder/PHReminder.m"
+  "$CODE_DIR/core/func_checklist/PHChecklist.m"
+)
+INCLUDES=(-I "$SHELL_DIR" -I "$CODE_DIR/core/func_reminder" -I "$CODE_DIR/core/func_checklist")
 
 echo "==> 1/4 生成 Web 资源（原生模式）"
 python3 "$BUILD_DIR/build_web.py" --native
@@ -25,16 +32,17 @@ mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources/app"
 for ARCH in arm64 x86_64; do
     clang -fobjc-arc -O2 -Wall -Wno-deprecated-declarations -arch "$ARCH" \
         -framework Cocoa -framework WebKit \
-        "$SHELL_SRC/PHMain.m" -o "$CONTENTS/MacOS/PopoHere-$ARCH"
+        "${INCLUDES[@]}" "${SOURCES[@]}" -o "$CONTENTS/MacOS/PopoHere-$ARCH"
 done
 lipo -create -output "$CONTENTS/MacOS/PopoHere" \
     "$CONTENTS/MacOS/PopoHere-arm64" "$CONTENTS/MacOS/PopoHere-x86_64"
 rm -f "$CONTENTS/MacOS/PopoHere-arm64" "$CONTENTS/MacOS/PopoHere-x86_64"
 
 echo "==> 3/4 组装 app 包"
-cp "$SHELL_SRC/Info.plist" "$CONTENTS/Info.plist"
+cp "$SHELL_DIR/Info.plist" "$CONTENTS/Info.plist"
 cp "$BUILD_DIR/out/native.html" "$CONTENTS/Resources/app/index.html"
-cp "$CODE_DIR/pet_others/tray_icon.png" "$CONTENTS/Resources/tray_icon.png"
+cp "$CODE_DIR/core/func_menu/panel.html" "$CONTENTS/Resources/app/panel.html"
+cp "$CODE_DIR/pet_images/menubar_1.png" "$CONTENTS/Resources/tray_icon.png"
 cp "$CODE_DIR/pet_others/AppIcon.icns" "$CONTENTS/Resources/AppIcon.icns"
 
 # 清除隔离属性，避免本机首次打开被 Gatekeeper 拦

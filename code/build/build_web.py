@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import io
 import json
 import os
@@ -58,22 +59,37 @@ def build(out_path: str, native: bool) -> int:
             if v not in needed:
                 needed.append(v)
 
-    images, missing = {}, []
+    # 同一张图可能被多个状态复用（尤其占位素材）。按内容去重成"唯一图池"，
+    # 再给每个文件名一个索引——直接往 JSON 里塞多份 base64 会让体积翻好几倍。
+    blobs: list[str] = []
+    index: dict[str, int] = {}
+    images: dict[str, int] = {}
+    missing = []
     for name in needed:
         path = os.path.join(ASSETS, name)
         if not os.path.exists(path):
             missing.append(name)
             continue
-        images[name] = image_data_uri(path)
+        digest = hashlib.md5(open(path, "rb").read()).hexdigest()
+        if digest not in index:
+            index[digest] = len(blobs)
+            blobs.append(image_data_uri(path))
+        images[name] = index[digest]
     if missing:
         print(f"警告：缺少素材 {missing}", file=sys.stderr)
+
+    images_js = (
+        "const POPO_BLOBS = " + json.dumps(blobs) + ";\n"
+        "const POPO_IMAGES = (() => { const m = " + json.dumps(images) +
+        "; const o = {}; for (const k in m) o[k] = POPO_BLOBS[m[k]]; return o; })();"
+    )
 
     core_js = "\n\n".join(
         f"/* ==== {os.path.relpath(m, CODE)} ==== */\n" + read(m) for m in CORE_MODULES
     )
 
     html = read(TEMPLATE)
-    html = html.replace("__IMAGES__", "const POPO_IMAGES = " + json.dumps(images) + ";")
+    html = html.replace("__IMAGES__", images_js)
     html = html.replace("__THEME__", "const POPO_THEME = " + json.dumps(theme, ensure_ascii=False) + ";")
     html = html.replace("__NATIVE__", "const POPO_NATIVE = " + ("true" if native else "false") + ";")
     html = html.replace("__CORE_JS__", core_js)
@@ -82,7 +98,8 @@ def build(out_path: str, native: bool) -> int:
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html)
 
-    print(f"生成 {out_path}  ({os.path.getsize(out_path) / 1024:.0f} KB, {len(images)} 张素材, "
+    print(f"生成 {out_path}  ({os.path.getsize(out_path) / 1024:.0f} KB, "
+          f"{len(images)} 个引用 / {len(blobs)} 张不同图, "
           f"{'原生' if native else '预览'}模式)")
     return 0
 

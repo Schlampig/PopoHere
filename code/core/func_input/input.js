@@ -29,31 +29,16 @@
       baseLeft: 0, baseTop: 0,
     };
 
+    // v2.0 起只有一个命中区：整只猫都是"撸它"
     function layoutHitboxes() {
-      const bx = theme.hitBoxes;
+      const r = theme.hitBoxes.body;
       const size = getSize();
-      for (const [name, node] of [['head', el.hbHead], ['paw', el.hbPaw]]) {
-        const r = bx[name];
-        if (!r || !node) continue;
-        node.style.left = r.x * size + 'px';
-        node.style.top = r.y * size + 'px';
-        node.style.width = r.w * size + 'px';
-        node.style.height = r.h * size + 'px';
-      }
-    }
-
-    // offset 用相对宠物左上角的像素，换算成比例再查区域
-    function regionAt(offsetX, offsetY) {
-      const bx = theme.hitBoxes;
-      const size = getSize();
-      const fx = offsetX / size;
-      const fy = offsetY / size;
-      for (const name of ['head', 'paw']) {
-        const r = bx[name];
-        if (!r) continue;
-        if (fx >= r.x && fx <= r.x + r.w && fy >= r.y && fy <= r.y + r.h) return name;
-      }
-      return 'blank';
+      const node = el.hbBody;
+      if (!r || !node) return;
+      node.style.left = r.x * size + 'px';
+      node.style.top = r.y * size + 'px';
+      node.style.width = r.w * size + 'px';
+      node.style.height = r.h * size + 'px';
     }
 
     el.pet.addEventListener('mousedown', (e) => {
@@ -65,9 +50,7 @@
       drag.startX = e.screenX;
       drag.startY = e.screenY;
 
-      const rect = el.pet.getBoundingClientRect();
-      drag.region = regionAt(e.clientX - rect.left, e.clientY - rect.top);
-      machine.pressStart(drag.region);
+      machine.pressStart('body');
 
       // 记录起始位置：仅网页预览模式用得到（原生模式由外壳用屏幕坐标接管）
       if (!native) {
@@ -106,7 +89,7 @@
       el.pet.classList.toggle('carrying', machine._carrying);
     });
 
-    return { layoutHitboxes: layoutHitboxes, regionAt: regionAt };
+    return { layoutHitboxes: layoutHitboxes };
   }
 
   root.Popo.createInput = createInput;

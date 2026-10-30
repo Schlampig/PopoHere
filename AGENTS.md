@@ -25,18 +25,36 @@ git push
 - 提交前**务必**跑测试（见下）并 `git status` 确认没把 `code/build/` 的产物带进去
 - 不要提交 `.workbuddy/`、`.wbapp_*.genie`（已在 `.gitignore` 里，含本机绝对路径）
 
-## 当前进度（v1.0，2026-10-28 定格）
+## 当前进度（v2.0）
 
 | 环节 | 状态 |
 |---|---|
-| 素材预处理（抠图/归一化） | ✅ `code/prepare/cutout.py` |
-| 状态机 | ✅ 10 状态，32 条断言 |
+| 素材预处理 | ✅ `code/prepare/cutout.py` + `build_theme.py`（扫文件名生成 theme.json） |
+| 状态机 | ✅ 7 常规 + 2 过渡状态，36 条断言 |
 | 拖拽跟手 | ✅ 原生屏幕坐标跟踪，7 条断言 |
-| 渲染 / 输入 / 菜单 | ✅ 已拆成 `func_*` 模块 |
-| 原生外壳 | ✅ 通用二进制，768KB |
-| 构建 / 打包 / 图标 | ✅ `code/build/` |
-| 功能菜单（v2.0 需求） | ⬜ 未做 |
-| 多素材 + 状态精简（v2.0 需求） | ⬜ 未做 |
+| 渲染 / 输入 / 菜单 | ✅ `func_*` 模块化 |
+| 玻璃菜单 + 状态面板 | ✅ `PHPanel` + `panel.html`（NSVisualEffectView 毛玻璃） |
+| 定时提醒 / 待办清单 | ✅ `func_reminder` / `func_checklist` |
+| 原生外壳 | ✅ 多模块编译，通用二进制 |
+| **真机视觉验证** | ⚠️ 见下方「未验证项」 |
+
+### 未验证项（下次接手必看）
+
+本次开发所在会话**无法截取到 GUI 窗口**：`screencapture` 能拍到桌面壁纸和菜单栏，
+但 agent 启动的窗口（包括一个最小 WKWebView 测试程序）都不会出现在截图里；
+而 `CGWindowListCopyWindowInfo` 显示窗口 `onscreen=1`、`alpha=1`、页面 `didFinishNavigation` 正常触发。
+判断是会话/窗口服务器的隔离，不是代码问题——但**毛玻璃面板的实际观感、右键弹菜单的位置、
+状态面板的拖动手感，都还没被人工确认过**。拿到真实桌面后请优先验这三点。
+
+### 素材现状
+
+`code/pet_images/` 里是**占位素材**（由 `make_placeholder_assets.py` 复制现有图生成，31 个文件只有 7 张不同）。
+用户按 PRD 拍好真图后会整体替换；那时应当：
+1. 把新图放进 `source/origin_images/`，按 `<状态>_<序号>.png` 命名
+2. 跑 `python3 code/prepare/cutout.py`（会覆盖 `pet_images/`）
+3. 跑 `python3 code/prepare/build_theme.py`
+4. 删除 `make_placeholder_assets.py`
+5. 重跑测试与构建
 
 ## 目录布局
 
@@ -52,8 +70,10 @@ code/core/                桌宠本体（只跟功能有关，与造型无关）
   func_state/               状态机（纯逻辑，不碰 DOM → 可以被 Node 直接测）
   func_render/              状态 → 贴图 / 动效 / 气泡
   func_input/               命中判定、单击 vs 拖拽
-  func_menu/                右键菜单
-  func_window/              AppKit 外壳：窗口 / 菜单栏 / 拖拽跟踪 / JS 桥
+  func_menu/                右键菜单桥 + panel.html（玻璃面板 UI）
+  func_reminder/            定时提醒（ObjC，NSUserDefaults 持久化）
+  func_checklist/           待办清单（ObjC，JSON 持久化）
+  func_window/              AppKit 外壳：窗口 / 菜单栏 / 拖拽 / 面板窗口
 code/build/               构建与打包脚本 + 产物（产物 gitignore）
 code/test/                测试
 code/prototype/           HTML 外壳模板（CSS + DOM）
@@ -72,6 +92,12 @@ doc/README_en.md          README 英文版
 # 预处理（素材有更新时；--check 只校验命名不跑模型）
 python3 code/prepare/cutout.py
 python3 code/prepare/cutout.py --check
+
+# 扫文件名生成 theme.json（加减素材后必跑）
+python3 code/prepare/build_theme.py
+
+# 研发期占位素材（正式素材到位后删除这个脚本）
+python3 code/prepare/make_placeholder_assets.py
 
 # 生成预览页（改了 core/ 或 prototype/ 之后）
 python3 code/build/build_web.py
@@ -125,18 +151,17 @@ JS 用 `clientX` 算位移 + `postMessage` 移动窗口会形成**坐标系反�
 - `bubble`：可选 emoji 字符串（PRD 原设想气泡 PNG，改用 emoji 少一堆素材）
 - `hitBoxes`：相对比例，**原点在图片左上角**（PRD 示例用的是左下原点，此处有意不同）
 
-## v1.0 状态机规则
+## 状态机规则（v2.0）
 
-1. `startled` 只能从 `sleep` 被点击/拖拽时进入
-2. 睡中被拖 → 先 `startled`，播完如果手还按着 → `dragging`
+1. 状态：`idle` / `touch` / `scratch` / `play` / `sleep` / `dragging` / `menu` + `startled` / `landed`
+2. `startled` 只能从 `sleep` 被点击/拖拽时进入；睡中被拖 → `startled` 播完若手还按着 → `dragging`
 3. `dragging` 是跨状态模态行为，释放后进 `landed`，不回原状态
-4. `walk` 被点击 → 直接回 `idle`（打断）
-5. `menu` 状态下忽略左键；状态机自带 2 秒兜底回 `idle`
+4. `play` 被点击 → 直接回 `idle`（打断），**不**进入 `touch`
+5. `menu` 状态下忽略左键；8 秒兜底回 `idle`
 6. 单击判定：位移 < 5px **且** 时长 < 300ms
-7. `scratch` 结束后 3 秒冷却
-8. 坑：连续摸脚的判定必须在「摸脚那一刻」算间隔，不能在 `pet_paw` 结束时算（否则第一次摸脚就自触发 scratch）
-
-> v2.0 会精简状态并重命名素材（`<state>_<序号>.png`），届时本节要整体重写。
+7. 连撸：进入 `touch` 时按 `touch_repeat_window_sec`（4s）累计 `touchStreak`，达 `touch_scratch_threshold`（10）→ `scratch`；`scratch` 后冷却 6s，期间不翻脸
+8. `touch` 播放中继续点击 = 重播并 +1 连击（否则连点 10 下只记 1 下）
+9. 坑：连击必须在「进入 touch 那一刻」算间隔，不能在结束时算
 
 ## 已知短板
 

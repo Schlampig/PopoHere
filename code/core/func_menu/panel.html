@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>PopoHere Panel</title>
+<style>
+  :root{
+    --panel-bg: rgba(20,19,18,0.62);
+    --panel-border: rgba(255,255,255,0.09);
+    --panel-inner: rgba(255,255,255,0.06);
+    --text-1: rgba(255,255,255,0.94);
+    --text-2: rgba(255,255,255,0.52);
+    --accent: #8FAE9B;
+    --danger: #D97A6C;
+    --hover: rgba(255,255,255,0.07);
+    --press: rgba(255,255,255,0.12);
+    --radius-panel: 16px;
+    --radius-item: 9px;
+    --row-h: 30px;
+  }
+  *{ box-sizing:border-box; -webkit-user-select:none; user-select:none; }
+  html,body{ margin:0; background:transparent; overflow:hidden; }
+  /* 给 CSS 投影留出空间，否则会被窗口边界切掉 */
+  body{ padding:12px; }
+  body{
+    font: 13px/1.4 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+    color: var(--text-1);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* 玻璃底板：宽度固定，右侧的数值/勾选才能对齐成一条线 */
+  .panel{
+    position:relative; width:252px; padding:10px;
+    background: var(--panel-bg);
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    backdrop-filter: blur(30px) saturate(180%);
+    border:1px solid var(--panel-border);
+    border-radius: var(--radius-panel);
+    box-shadow: 0 18px 48px rgba(0,0,0,.42), inset 0 1px 0 var(--panel-inner);
+    overflow:hidden;
+  }
+  /* 降低透明度时的降级 */
+  body.reduce-transparency .panel{
+    background: rgba(28,27,26,0.97);
+    -webkit-backdrop-filter:none; backdrop-filter:none;
+  }
+
+  .group{ padding:2px 0; }
+  .sep{ height:1px; margin:6px 8px; background:rgba(255,255,255,.08); }
+
+  .row{
+    display:flex; align-items:center; gap:8px;
+    height:var(--row-h); padding:0 8px; margin:1px 0;
+    border-radius: var(--radius-item);
+    cursor:default; white-space:nowrap;
+  }
+  .row:hover{ background:var(--hover); }
+  .row:active{ background:var(--press); }
+  .row.danger{ color:var(--danger); }
+  .row .ico{ width:16px; text-align:center; font-size:12px; opacity:.85; }
+  .row .label{ flex:1; }
+  .row .value{ color:var(--text-2); font-size:12px; font-variant-numeric: tabular-nums; }
+  .row .chev{ color:var(--text-2); font-size:14px; margin-left:2px; }
+  .row .ext{ color:var(--text-2); font-size:12px; }
+  .row .tick{ color:var(--accent); font-size:12px; width:14px; text-align:center; }
+  .row.disabled{ opacity:.35; pointer-events:none; }
+  .row.head{ color:var(--text-2); font-size:11px; letter-spacing:.04em; font-weight:600;
+             height:22px; cursor:default; }
+  .row.head:hover{ background:transparent; }
+
+  /* 内联展开的选项（大小/声音） */
+  .options{ display:none; padding:2px 0 4px 24px; }
+  .options.open{ display:block; }
+  .opt{
+    display:flex; align-items:center; height:26px; padding:0 8px;
+    border-radius:7px; color:var(--text-2); font-size:12.5px;
+  }
+  .opt:hover{ background:var(--hover); color:var(--text-1); }
+  .opt.active{ color:var(--accent); }
+  .opt .mark{ width:14px; }
+
+  /* 子视图（提醒 / 待办） */
+  .sub{ display:none; }
+  body[data-view="reminders"] .view-menu,
+  body[data-view="todos"] .view-menu{ display:none; }
+  body[data-view="reminders"] .view-reminders,
+  body[data-view="todos"] .view-todos{ display:block; }
+  body[data-view="status"] .view-menu{ display:none; }
+  body[data-view="status"] .view-status{ display:block; }
+  .view-status{ display:none; }
+  body[data-view="status"] .panel{ width:248px; }
+
+  .back{ display:flex; align-items:center; gap:6px; height:26px; padding:0 8px;
+         color:var(--text-2); font-size:12px; border-radius:7px; }
+  .back:hover{ background:var(--hover); color:var(--text-1); }
+
+  /* 提醒条目 */
+  .rem{ display:flex; align-items:center; gap:8px; height:32px; padding:0 8px; border-radius:8px; }
+  .rem:hover{ background:var(--hover); }
+  .switch{ width:26px; height:15px; border-radius:8px; background:rgba(255,255,255,.16);
+           position:relative; flex:none; transition:background .15s; }
+  .switch::after{ content:''; position:absolute; top:2px; left:2px; width:11px; height:11px;
+                  border-radius:50%; background:#fff; opacity:.85; transition:transform .15s; }
+  .switch.on{ background:var(--accent); }
+  .switch.on::after{ transform:translateX(11px); }
+  .rem .name{ flex:1; font-size:12.5px; }
+  .rem .mins{ color:var(--text-2); font-size:12px; font-variant-numeric:tabular-nums; }
+  .stepper{ display:flex; gap:2px; }
+  .stepper span{ width:18px; height:18px; line-height:17px; text-align:center;
+                 border-radius:5px; background:rgba(255,255,255,.1); font-size:12px; }
+  .stepper span:hover{ background:rgba(255,255,255,.2); }
+
+  /* 待办 */
+  .todo{ display:flex; align-items:center; gap:8px; min-height:28px; padding:2px 8px; border-radius:7px; }
+  .todo:hover{ background:var(--hover); }
+  .box{ width:14px; height:14px; border-radius:4px; border:1.5px solid rgba(255,255,255,.35);
+        flex:none; position:relative; }
+  .todo.done .box{ background:var(--accent); border-color:var(--accent); }
+  .todo.done .box::after{ content:''; position:absolute; left:3px; top:0.5px; width:4px; height:8px;
+        border:solid #1a1a1a; border-width:0 1.6px 1.6px 0; transform:rotate(45deg); }
+  .todo .text{ flex:1; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; }
+  .todo.done .text{ color:var(--text-2); text-decoration:line-through; }
+  .todo input{ flex:1; background:none; border:none; outline:none; color:var(--text-1);
+               font:inherit; font-size:12.5px; }
+  .todo input::placeholder{ color:rgba(255,255,255,.28); }
+  .add{ color:var(--text-2); }
+
+  /* 状态面板 */
+  .hdr{ display:flex; align-items:center; gap:7px; height:30px; padding:0 8px; margin-bottom:2px; }
+  .hdr .dot{ width:7px; height:7px; border-radius:50%; background:var(--accent); }
+  .hdr .title{ flex:1; font-size:12.5px; font-weight:600; letter-spacing:.01em; }
+  .hdr .ver{ color:var(--text-2); font-size:11px; }
+  .st{ display:flex; align-items:center; gap:8px; height:27px; padding:0 8px; border-radius:7px; }
+  .st:hover{ background:var(--hover); }
+  .st .ring{ width:7px; height:7px; border-radius:50%; border:1.3px solid rgba(255,255,255,.35); }
+  .st.cur .ring{ background:var(--accent); border-color:var(--accent); }
+  .st .cn{ flex:1; font-size:12.5px; }
+  .st .id{ color:var(--text-2); font-size:11px; font-variant-numeric:tabular-nums; }
+  .foot{ display:flex; justify-content:space-between; padding:6px 8px 2px;
+         color:var(--text-2); font-size:11px; font-variant-numeric:tabular-nums; }
+</style>
+</head>
+<body data-view="menu">
+<div class="panel">
+
+  <!-- ========== 菜单视图 ========== -->
+  <div class="view-menu">
+    <div class="group">
+      <div class="row" data-action="viewReminders">
+        <span class="ico">⏰</span><span class="label">定时提醒</span>
+        <span class="value" id="vRem">—</span><span class="chev">›</span>
+      </div>
+      <div class="row" data-action="viewTodos">
+        <span class="ico">☑</span><span class="label">待办清单</span>
+        <span class="value" id="vTodo">—</span><span class="chev">›</span>
+      </div>
+    </div>
+    <div class="sep"></div>
+    <div class="group">
+      <div class="row" data-action="togglePet"><span class="label">显示 / 隐藏桌宠</span></div>
+      <div class="row" data-action="toggleStatus" id="rowStatus">
+        <span class="label">显示 / 隐藏桌宠状态</span><span class="tick" id="vStatus"></span>
+      </div>
+      <div class="row" data-action="expandSize">
+        <span class="label">大小</span><span class="value" id="vSize">220</span><span class="chev">›</span>
+      </div>
+      <div class="options" id="optSize"></div>
+      <div class="row" data-action="expandSound">
+        <span class="label">声音</span><span class="value" id="vSound">关</span><span class="chev">›</span>
+      </div>
+      <div class="options" id="optSound"></div>
+      <div class="row" data-action="togglePause">
+        <span class="label">暂停互动</span><span class="tick" id="vPause"></span>
+      </div>
+      <div class="row" data-action="toggleAutostart">
+        <span class="label">开机自启</span><span class="tick" id="vAuto"></span>
+      </div>
+      <div class="row" data-action="openAssets"><span class="label">打开素材文件夹</span></div>
+      <div class="row" data-action="resetPos"><span class="label">重置位置</span></div>
+    </div>
+    <div class="sep"></div>
+    <div class="group">
+      <div class="row" data-action="github">
+        <span class="label">关于 PopoHere</span>
+        <span class="value">GitHub</span><span class="ext">↗</span>
+      </div>
+      <div class="row danger" data-action="quit"><span class="label">退出</span></div>
+    </div>
+  </div>
+
+  <!-- ========== 定时提醒 ========== -->
+  <div class="sub view-reminders">
+    <div class="back" data-action="back">‹ 返回</div>
+    <div id="remList"></div>
+  </div>
+
+  <!-- ========== 待办清单 ========== -->
+  <div class="sub view-todos">
+    <div class="back" data-action="back">‹ 返回</div>
+    <div id="todoList"></div>
+    <div class="row add" data-action="todoAdd" id="todoAdd"><span class="label">＋ 添加一条</span></div>
+    <div class="sep"></div>
+    <div class="row danger" data-action="todoClear"><span class="label">清空全部</span></div>
+  </div>
+
+  <!-- ========== 状态面板 ========== -->
+  <div class="sub view-status">
+    <div class="hdr" id="statusHeader">
+      <span class="dot"></span><span class="title">PopoHere</span><span class="ver" id="vVer2"></span>
+    </div>
+    <div class="sep"></div>
+    <div id="stateList"></div>
+    <div class="sep"></div>
+    <div class="foot"><span id="ftState">—</span><span id="ftTime">0.0s</span></div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  const qs = new URLSearchParams(location.search);
+  const VIEW = (location.hash || '').replace('#', '') || qs.get('view') || 'menu';
+  const MOCK = qs.get('mock') === '1';
+
+  let snapshot = {
+    size: 220, sound: false, soundAvailable: false,
+    paused: false, autostart: false, petHidden: false, statusOpen: false,
+    version: '2.0.0', state: 'idle', elapsed: 0,
+    states: [], reminders: [], todos: [],
+  };
+  let view = VIEW;
+
+  const post = (msg) => {
+    if (MOCK) { console.log('[panel]', msg); return; }
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.popo) {
+      window.webkit.messageHandlers.popo.postMessage(msg);
+    }
+  };
+
+  function resize() {
+    requestAnimationFrame(() => {
+      const r = document.querySelector('.panel').getBoundingClientRect();
+      post({ type: 'panelResize', width: Math.ceil(r.width), height: Math.ceil(r.height) });
+    });
+  }
+
+  function tick(el, on) { el.textContent = on ? '✓' : ''; }
+
+  function renderMenu() {
+    document.getElementById('vSize').textContent = snapshot.size;
+    document.getElementById('vSound').textContent = snapshot.soundAvailable
+      ? (snapshot.sound ? '开' : '关') : '无素材';
+    document.getElementById('rowStatus').classList.toggle('disabled', snapshot.petHidden);
+    document.getElementById('vStatus').textContent = snapshot.statusOpen ? '✓' : '';
+    tick(document.getElementById('vPause'), snapshot.paused);
+    tick(document.getElementById('vAuto'), snapshot.autostart);
+
+    const running = snapshot.reminders.filter(r => r.enabled).length;
+    document.getElementById('vRem').textContent = running ? running + ' 条运行中' : '未启用';
+    const left = snapshot.todos.filter(t => !t.done).length;
+    document.getElementById('vTodo').textContent = left ? left + ' 项未完成' : '已清空';
+  }
+
+  function renderOptions() {
+    const sizeBox = document.getElementById('optSize');
+    sizeBox.innerHTML = [160, 220, 300, 380].map(n =>
+      `<div class="opt ${n === snapshot.size ? 'active' : ''}" data-size="${n}">
+         <span class="mark">${n === snapshot.size ? '✓' : ''}</span>${n} px</div>`).join('');
+    const soundBox = document.getElementById('optSound');
+    soundBox.innerHTML = snapshot.soundAvailable
+      ? [['开', true], ['关', false]].map(([label, val]) =>
+          `<div class="opt ${val === snapshot.sound ? 'active' : ''}" data-sound="${val}">
+             <span class="mark">${val === snapshot.sound ? '✓' : ''}</span>${label}</div>`).join('')
+      : '<div class="opt" style="opacity:.4">未检测到音频素材</div>';
+  }
+
+  function renderReminders() {
+    document.getElementById('remList').innerHTML = snapshot.reminders.map((r, i) => `
+      <div class="rem">
+        <div class="switch ${r.enabled ? 'on' : ''}" data-rem-toggle="${i}"></div>
+        <span class="name">${r.name}</span>
+        <div class="stepper">
+          <span data-rem-minus="${i}">−</span>
+          <span class="mins">${r.minutes}′</span>
+          <span data-rem-plus="${i}">＋</span>
+        </div>
+      </div>`).join('');
+  }
+
+  function renderTodos() {
+    const list = document.getElementById('todoList');
+    if (!snapshot.todos.length) {
+      list.innerHTML = '<div class="todo" style="color:var(--text-2)">还没有待办，点下面加一条</div>';
+    } else {
+      list.innerHTML = snapshot.todos.map((t, i) => `
+        <div class="todo ${t.done ? 'done' : ''}" data-todo-toggle="${i}">
+          <div class="box"></div><span class="text">${escapeHtml(t.text)}</span>
+        </div>`).join('');
+    }
+    document.getElementById('todoAdd').style.display =
+      snapshot.todos.length >= 10 ? 'none' : '';
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function renderStatus() {
+    document.getElementById('vVer2').textContent = 'v' + snapshot.version;
+    document.getElementById('stateList').innerHTML = snapshot.states.map(s => `
+      <div class="st ${s.id === snapshot.state ? 'cur' : ''}" data-force="${s.id}">
+        <span class="ring"></span><span class="cn">${s.cn}</span><span class="id">${s.id}</span>
+      </div>`).join('');
+    document.getElementById('ftState').textContent = snapshot.state;
+    document.getElementById('ftTime').textContent = (snapshot.elapsed || 0).toFixed(1) + 's';
+  }
+
+  function render() {
+    document.body.dataset.view = view;
+    document.body.classList.toggle('reduce-transparency', !!snapshot.reduceTransparency);
+    if (view === 'menu') { renderMenu(); renderOptions(); }
+    if (view === 'reminders') renderReminders();
+    if (view === 'todos') renderTodos();
+    if (view === 'status') renderStatus();
+    resize();
+  }
+
+  document.addEventListener('click', (e) => {
+    const row = e.target.closest('.row');
+    const opt = e.target.closest('.opt');
+    const rem = e.target.closest('[data-rem-toggle],[data-rem-minus],[data-rem-plus]');
+    const todo = e.target.closest('[data-todo-toggle]');
+    const force = e.target.closest('[data-force]');
+
+    if (opt && opt.dataset.size) { post({ type: 'action', action: 'setSize', value: +opt.dataset.size }); return; }
+    if (opt && opt.dataset.sound) { post({ type: 'action', action: 'setSound', value: opt.dataset.sound === 'true' }); return; }
+
+    if (rem) {
+      if (rem.dataset.remToggle !== undefined) post({ type: 'action', action: 'remToggle', value: +rem.dataset.remToggle });
+      if (rem.dataset.remMinus !== undefined) post({ type: 'action', action: 'remMinus', value: +rem.dataset.remMinus });
+      if (rem.dataset.remPlus !== undefined) post({ type: 'action', action: 'remPlus', value: +rem.dataset.remPlus });
+      return;
+    }
+    if (todo) { post({ type: 'action', action: 'todoToggle', value: +todo.dataset.todoToggle }); return; }
+    if (force) { post({ type: 'action', action: 'forceState', value: force.dataset.force }); return; }
+
+    if (!row) return;
+    const action = row.dataset.action;
+    switch (action) {
+      case 'expandSize': document.getElementById('optSize').classList.toggle('open'); render(); return;
+      case 'expandSound': document.getElementById('optSound').classList.toggle('open'); render(); return;
+      case 'viewReminders': view = 'reminders'; render(); return;
+      case 'viewTodos': view = 'todos'; render(); return;
+      case 'back': view = 'menu'; render(); return;
+      case 'todoAdd': post({ type: 'action', action: 'todoAddPrompt' }); return;
+      default:
+        if (action) post({ type: 'action', action: action });
+    }
+  });
+
+  // 双击待办文字进入编辑（简单起见用 prompt 交给外壳处理）
+  document.addEventListener('dblclick', (e) => {
+    const t = e.target.closest('.todo[data-todo-toggle]');
+    if (t && view === 'todos') post({ type: 'action', action: 'todoEdit', value: +t.dataset.todoToggle });
+  });
+
+  // 拖动状态面板：按住标题栏
+  const hdr = document.getElementById('statusHeader');
+  if (hdr) hdr.addEventListener('mousedown', (e) => {
+    if (e.button === 0) post({ type: 'panelDragStart' });
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') post({ type: 'action', action: 'closePanel' });
+  });
+
+  window.Panel = {
+    update(next) { snapshot = Object.assign({}, snapshot, next); render(); },
+    setView(v) { view = v; render(); },
+  };
+
+  if (MOCK) {
+    snapshot = {
+      size: 220, sound: false, soundAvailable: false, paused: true, autostart: false,
+      petHidden: false, statusOpen: true, version: '2.0.0',
+      state: 'idle', elapsed: 3.2,
+      states: [
+        { id: 'idle', cn: '静息' }, { id: 'touch', cn: '被撸' }, { id: 'scratch', cn: '挠人' },
+        { id: 'play', cn: '自娱' }, { id: 'sleep', cn: '睡觉' }, { id: 'startled', cn: '惊醒' },
+        { id: 'landed', cn: '落地' },
+      ],
+      reminders: [
+        { name: '番茄钟', minutes: 25, enabled: true },
+        { name: '喝水', minutes: 45, enabled: true },
+        { name: '久坐拉伸', minutes: 60, enabled: false },
+      ],
+      todos: [
+        { text: '把 PRD 第 7 章的设计变量落成 CSS', done: true },
+        { text: '验证面板在浅色桌面上的可读性', done: false },
+        { text: '写 v2.0 的 CHANGELOG', done: false },
+      ],
+    };
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

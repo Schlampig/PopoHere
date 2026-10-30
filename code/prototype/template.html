@@ -28,7 +28,6 @@
   /* ---- 原生模式：打包进 .app 时只留猫，不显示调试面板和假桌面 ---- */
   body.native #desktop { background: none; }
   body.native #menubar, body.native #panel { display: none; }
-  body.native #ctx .native-hidden { display: none; }
   #stage { position: absolute; inset: 0; }
 
   #pet {
@@ -45,8 +44,7 @@
 
   .hitbox { position: absolute; pointer-events: none; display: none;
     border-radius: 10px; font-size: 10px; color: #fff; padding: 2px 4px; }
-  #hbHead { background: rgba(60,140,255,.28); border: 1.5px dashed rgba(30,90,200,.8); }
-  #hbPaw  { background: rgba(255,140,60,.28); border: 1.5px dashed rgba(200,90,20,.8); }
+  #hbBody { background: rgba(60,140,255,.16); border: 1.5px dashed rgba(30,90,200,.7); }
   #pet.showHB .hitbox { display: block; }
 
   #bubble {
@@ -99,19 +97,6 @@
   .sliderRow { display:flex; align-items:center; gap:8px; font-size:11px; margin-top:6px; }
   .sliderRow input { flex: 1; }
 
-  /* ---- 右键菜单 ---- */
-  #ctx {
-    position: absolute; z-index: 50; display: none; min-width: 172px; padding: 5px;
-    background: rgba(246,246,246,.86); backdrop-filter: blur(24px);
-    border: .5px solid rgba(0,0,0,.14); border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0,0,0,.22); font-size: 12.5px; color: #1d1d1f;
-  }
-  #ctx.on { display: block; }
-  #ctx .item { padding: 5px 10px; border-radius: 5px; cursor: pointer; display:flex; justify-content: space-between; gap: 10px; }
-  #ctx .item:hover { background: #2b5bd7; color: #fff; }
-  #ctx .item.off { opacity: .4; pointer-events: none; }
-  #ctx .sep { height: 1px; background: rgba(0,0,0,.1); margin: 4px 6px; }
-  #ctx .state { opacity: .55; font-size: 11px; }
 </style>
 </head>
 <body>
@@ -124,15 +109,14 @@
   <div id="stage">
     <div id="pet">
       <img id="petImg" alt="popo" draggable="false">
-      <div class="hitbox" id="hbHead">头</div>
-      <div class="hitbox" id="hbPaw">脚</div>
+      <div class="hitbox" id="hbBody">猫</div>
       <div id="bubble"></div>
     </div>
   </div>
 
   <div id="panel">
     <h3>🔧 调试面板（正式版没有）</h3>
-    <div id="hint">拖拽 = 抱起 · 单击头/脚 = 互动 · 右键 = 菜单<br>静置 5 秒会自己走动或睡着</div>
+    <div id="hint">拖拽 = 抱起 · 单击 = 撸它（连撸 10 次会翻脸）· 右键菜单在正式版可用<br>静置 5 秒会自己玩或睡觉</div>
     <div class="row"><span class="k">当前状态</span><span class="v" id="vState">idle</span></div>
     <div class="row"><span class="k">已停留</span><span class="v" id="vElapsed">0.0s</span></div>
     <div class="row"><span class="k">挠人冷却</span><span class="v" id="vCool">—</span></div>
@@ -149,15 +133,6 @@
     <div id="log"></div>
   </div>
 
-  <div id="ctx">
-    <div class="item" id="mToggle">显示 / 隐藏<span class="state"></span></div>
-    <div class="item" id="mPause">暂停互动<span class="state">否</span></div>
-    <div class="sep"></div>
-    <div class="item off" id="mFolder">打开主题文件夹</div>
-    <div class="item native-hidden" id="mReset">重置宠物位置</div>
-    <div class="sep"></div>
-    <div class="item" id="mQuit">退出 PopoHere</div>
-  </div>
 </div>
 
 <script>
