@@ -71,7 +71,9 @@
     el: el,
     images: IMAGES,
     machine: machine,
-    onTransition: (from, to) => { if (!NATIVE) log(`${from || '—'} → ${to}`); },
+    onTransition: (from, to) => {
+      if (!NATIVE) log(`${from || '—'} → ${to}`);
+    },
   });
 
   const input = Popo.createInput({
@@ -167,6 +169,8 @@
     },
     show: (v) => { el.pet.classList.toggle('hidden', !v); },
     notify: (text, ms) => renderer.flashBubble(text, ms),
+    // 菜单状态由外壳唯一驱动：面板显示 → menuOpened()，面板收起 → menuClosed()
+    menuOpened: () => machine.openMenu(),
     menuClosed: () => menu.notifyClosed(),
     setSize: setSize,
     force: (state) => machine.force(state),

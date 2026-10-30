@@ -20,40 +20,25 @@
     const native = !!opts.native;
     const log = opts.log || function () {};
 
-    let open = false;
-
-    function close() {
-      if (!open) return;
-      open = false;
-      machine.closeMenu();
-    }
-
-    /** 由外壳在面板真正收起时回调 */
+    /** 由外壳在面板真正收起时回调——这是唯一会离开 menu 状态的入口 */
     function notifyClosed() {
-      open = false;
       machine.closeMenu();
     }
 
     if (el.desktop) {
       el.desktop.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        if (open) { close(); return; }
         if (!native) {
           log('右键菜单在正式版（.app）里可用');
           return;
         }
-        // 屏幕上光标的绝对位置：面板窗口要贴着它弹出来
-        open = true;
-        machine.openMenu();
+        // 只请求外壳开面板（开着就收起，由外壳判断）。状态切到 menu 由外壳在
+        // 面板真正显示后回调 menuOpened()，避免两边各管一半导致不同步。
         post({ type: 'openMenu', x: e.screenX, y: e.screenY });
       });
     }
 
-    return {
-      close: close,
-      notifyClosed: notifyClosed,
-      isOpen: () => open,
-    };
+    return { notifyClosed: notifyClosed };
   }
 
   root.Popo.createMenu = createMenu;

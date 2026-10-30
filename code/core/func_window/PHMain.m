@@ -343,10 +343,13 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
 }
 
 - (void)openMenuAtX:(CGFloat)x y:(CGFloat)y {
+    if (self.menuPanel.isShown) { [self.menuPanel hide]; return; }   // 右键切换
     CGFloat screenHeight = [NSScreen mainScreen].frame.size.height;
     NSPoint p = NSMakePoint(x, screenHeight - y);   // JS 的 y 从顶部算
     [self pushSnapshotToPanels];
     [self.menuPanel showAtPoint:p];
+    // 面板真正显示出来之后，才让猫进入 menu 状态
+    [self.web evaluateJavaScript:@"App.menuOpened()" completionHandler:nil];
 }
 
 #pragma mark - 动作分发（菜单栏与玻璃面板共用）
@@ -734,6 +737,7 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             if ([qa isEqualToString:@"status"]) [self showStatusPanel];
+            if ([qa isEqualToString:@"menu"]) [self openMenuAtX:200 y:300];
         });
     }
 }
