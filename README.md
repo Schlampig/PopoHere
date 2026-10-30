@@ -71,14 +71,15 @@ source/origin_images/
 ├── idle.png           静息
 ├── idle_2.png         同一状态想要多张就加序号，运行时随机抽
 ├── sleep.png          睡觉
-├── pet_touch_1.png    被摸
-├── pet_touch_2.png
+├── touch_1.png    被摸
+├── touch_2.png
 ├── walk.png           自己溜达
 ├── dragging.png       被拎起来
 └── ...
 ```
 
-背景不用管，程序会自动抠掉。完整的状态清单和命名规范见 [PRD](doc/PRD/PRD.md)。
+**背景尽量用纯色**（白墙、纯色地板）——预处理是语义分割不是大模型，纯色背景下边缘最干净。
+完整的状态清单和命名规范见 [PRD](doc/PRD/PRD.md)。
 
 **第二步：跑预处理。**
 

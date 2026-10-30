@@ -71,14 +71,14 @@ source/origin_images/
 ├── idle.png           at rest
 ├── idle_2.png         add an index to give a state several frames; one is picked at random
 ├── sleep.png          sleeping
-├── pet_touch_1.png    being petted
-├── pet_touch_2.png
+├── touch_1.png    being petted
+├── touch_2.png
 ├── walk.png           wandering
 ├── dragging.png       picked up
 └── ...
 ```
 
-Backgrounds don't matter — they are removed automatically. The full state list and naming rules are in the [PRD](PRD/PRD.md).
+**Keep the background a solid colour** (a plain wall, a plain floor). Background removal is semantic segmentation, not a large model — solid backdrops give the cleanest edges. The full state list and naming rules are in the [PRD](PRD/PRD.md).
 
 **Step 2: preprocess.**
 
