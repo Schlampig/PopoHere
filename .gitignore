@@ -1,34 +1,30 @@
-# macOS 垃圾
+# ---- macOS ----
 .DS_Store
-*.swp
 .AppleDouble
+*.swp
 
-# 编辑器
+# ---- 编辑器 ----
 .vscode/
 .idea/
 
-# Python 缓存
+# ---- Python ----
 __pycache__/
 *.py[cod]
 *.egg-info/
-build/
-dist/
 .venv/
 venv/
 
-# PySide6 / 打包产物
-*.app/
+# ---- 构建产物（都可由 code/build/ 下的脚本重新生成，不入库）----
+code/build/out/
+code/build/dist/
+code/build/releases/
+code/build/site/
+*.app
 *.dmg
-pysidedeploy.spec
 
-# 构建产物（随时可用 native/build.sh 重新生成）
-build/
-dist/
-prototype/index.html
+# ---- 本地工具链状态（含本机绝对路径，勿公开）----
+.workbuddy/
+.wbapp_*.genie
 
-# 发布包（体积大，且随取随构建）
-releases/
-site/*.zip
-
-
-
+# ---- 本地历史归档（旧版本素材与截图，仅本机保留）----
+归档/
