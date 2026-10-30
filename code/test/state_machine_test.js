@@ -114,14 +114,19 @@ eq('处于 play', m.state, 'play');
 click(m);
 eq('play 中点击 → idle', m.state, 'idle');
 
-/* ---- 11. menu 状态与 8 秒兜底 ---- */
+/* ---- 11. menu 状态 ---- */
 m = mk(0.9);
 m.openMenu();
 eq('openMenu → menu', m.state, 'menu');
+step(m, 10);
+eq('菜单开着 10s 不会自己睡着', m.state, 'menu');
 click(m);
-eq('menu 中点击无效', m.state, 'menu');
-step(m, BEH.menu_timeout_sec + 0.2);
-eq('menu 超时 → idle', m.state, 'idle');
+eq('点猫收起菜单 → idle', m.state, 'idle');
+
+// 兜底：面板万一没关成功，超时也要能回到 idle
+m.openMenu();
+step(m, BEH.menu_timeout_sec + 0.5);
+eq('兜底超时 → idle', m.state, 'idle');
 
 /* ---- 12. 暂停互动 ---- */
 m = mk(0.9);

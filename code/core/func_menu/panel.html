@@ -19,24 +19,23 @@
     --row-h: 30px;
   }
   *{ box-sizing:border-box; -webkit-user-select:none; user-select:none; }
-  html,body{ margin:0; background:transparent; overflow:hidden; }
-  /* 给 CSS 投影留出空间，否则会被窗口边界切掉 */
-  body{ padding:12px; }
+  html,body{ margin:0; padding:0; background:transparent; overflow:hidden; }
   body{
     font: 13px/1.4 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
     color: var(--text-1);
     -webkit-font-smoothing: antialiased;
   }
 
-  /* 玻璃底板：宽度固定，右侧的数值/勾选才能对齐成一条线 */
+  /* 玻璃底板：宽度固定，右侧的数值/勾选才能对齐成一条线。
+     投影交给 NSWindow（透明窗口的阴影会跟着圆角走），这里只画完整的边框与高光。 */
   .panel{
-    position:relative; width:252px; padding:10px;
+    position:relative; width:252px; padding:10px; margin:0;
     background: var(--panel-bg);
-    -webkit-backdrop-filter: blur(30px) saturate(180%);
-    backdrop-filter: blur(30px) saturate(180%);
     border:1px solid var(--panel-border);
     border-radius: var(--radius-panel);
-    box-shadow: 0 18px 48px rgba(0,0,0,.42), inset 0 1px 0 var(--panel-inner);
+    box-shadow:
+      inset 0 0 0 1px rgba(255,255,255,.05),   /* 内圈玻璃反光，四边都有 */
+      inset 0 1px 0 var(--panel-inner);
     overflow:hidden;
   }
   /* 降低透明度时的降级 */
@@ -130,6 +129,9 @@
   .hdr .dot{ width:7px; height:7px; border-radius:50%; background:var(--accent); }
   .hdr .title{ flex:1; font-size:12.5px; font-weight:600; letter-spacing:.01em; }
   .hdr .ver{ color:var(--text-2); font-size:11px; }
+  .hdr .close{ width:18px; height:18px; line-height:17px; text-align:center; border-radius:5px;
+               color:var(--text-2); font-size:10px; }
+  .hdr .close:hover{ background:var(--hover); color:var(--text-1); }
   .st{ display:flex; align-items:center; gap:8px; height:27px; padding:0 8px; border-radius:7px; }
   .st:hover{ background:var(--hover); }
   .st .ring{ width:7px; height:7px; border-radius:50%; border:1.3px solid rgba(255,255,255,.35); }
@@ -207,6 +209,7 @@
   <div class="sub view-status">
     <div class="hdr" id="statusHeader">
       <span class="dot"></span><span class="title">PopoHere</span><span class="ver" id="vVer2"></span>
+      <span class="close" data-action="hideStatus" title="隐藏状态面板">✕</span>
     </div>
     <div class="sep"></div>
     <div id="stateList"></div>
@@ -239,8 +242,11 @@
 
   function resize() {
     requestAnimationFrame(() => {
-      const r = document.querySelector('.panel').getBoundingClientRect();
-      post({ type: 'panelResize', width: Math.ceil(r.width), height: Math.ceil(r.height) });
+      const el = document.querySelector('.panel');
+      const r = el.getBoundingClientRect();
+      post({ type: 'panelResize',
+             width: Math.ceil(r.width),
+             height: Math.ceil(el.scrollHeight) });
     });
   }
 
@@ -326,7 +332,7 @@
   }
 
   document.addEventListener('click', (e) => {
-    const row = e.target.closest('.row');
+    const row = e.target.closest('.row, .back, .close');
     const opt = e.target.closest('.opt');
     const rem = e.target.closest('[data-rem-toggle],[data-rem-minus],[data-rem-plus]');
     const todo = e.target.closest('[data-todo-toggle]');
@@ -353,6 +359,7 @@
       case 'viewTodos': view = 'todos'; render(); return;
       case 'back': view = 'menu'; render(); return;
       case 'todoAdd': post({ type: 'action', action: 'todoAddPrompt' }); return;
+      case 'hideStatus': post({ type: 'action', action: 'hideStatus' }); return;
       default:
         if (action) post({ type: 'action', action: action });
     }

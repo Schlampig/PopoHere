@@ -68,6 +68,8 @@
         return;
       }
       if (this.state === 'menu') {
+        // 菜单开着时不允许自然入睡（否则用户还在设置里，猫已经睡了）。
+        // 这个超时只是"面板没关成功"的兜底，值给得很大。
         if (this.elapsed >= this.beh.menu_timeout_sec) this._goto('idle');
         return;
       }
@@ -108,7 +110,8 @@
 
     /* --- 鼠标 --- */
     pressStart(region) {
-      if (this.paused || this.state === 'menu') return;
+      if (this.paused) return;
+      // menu 状态也要记录按压：面板开着时点猫 = 关掉面板，不能把这一下吞掉
       this._press = { region, dragging: false };
     }
 
@@ -150,6 +153,10 @@
 
     _click() {
       switch (this.state) {
+        case 'menu':
+          // 点猫即收起菜单并回到静息，下一次点击就能正常互动
+          this.closeMenu();
+          break;
         case 'idle':
           this._enterTouch();
           break;

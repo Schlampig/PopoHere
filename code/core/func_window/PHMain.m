@@ -187,6 +187,11 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
     self.statusPanel.dismissOnResignKey = NO;
     self.statusPanel.onAction = ^(NSString *action, id value) { [weakSelf performAction:action value:value]; };
     self.statusPanel.onDragStart = ^{ [weakSelf beginPanelDrag]; };
+    self.statusPanel.onHide = ^{
+        [[NSUserDefaults standardUserDefaults] setBool:NO forKey:kStatusOpenKey];
+        [weakSelf refreshMenuChecks];
+        [weakSelf pushSnapshotToPanels];
+    };
 }
 
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
@@ -352,6 +357,9 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
     if ([action isEqualToString:@"togglePet"]) {
         [self setPetHidden:!self.petHidden];
 
+    } else if ([action isEqualToString:@"hideStatus"]) {
+        [self.statusPanel hide];
+
     } else if ([action isEqualToString:@"toggleStatus"]) {
         if (self.petHidden) return;                 // 桌宠不在，面板没有意义
         [self toggleStatusPanel];
@@ -387,8 +395,10 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
     } else if ([action isEqualToString:@"viewReminders"] || [action isEqualToString:@"viewTodos"]) {
         [self pushSnapshotToPanels];
         if (!self.menuPanel.isShown) {
-            NSPoint p = NSMakePoint(NSMidX(self.statusItem.button.window.frame),
-                                    NSMaxY(NSScreen.mainScreen.frame) - 24);
+            NSRect vis = [NSScreen mainScreen].visibleFrame;
+            NSPoint p = NSMakePoint(NSMaxX(vis) - 300, NSMaxY(vis) - 4);
+            NSWindow *btnWin = self.statusItem.button.window;
+            if (btnWin) p = NSMakePoint(NSMidX(btnWin.frame) - 120, NSMaxY(vis) - 2);
             [self.menuPanel showAtPoint:p];
         }
         NSString *view = [action isEqualToString:@"viewReminders"] ? @"reminders" : @"todos";
@@ -430,6 +440,7 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
     }
 
     [self refreshMenuChecks];
+    [self pushSnapshotToPanels];
 }
 
 #pragma mark - 桌宠显隐 / 状态面板
@@ -440,6 +451,7 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
     if (hidden) {
         [self.window orderOut:nil];
         // 面板从属于桌宠：一起收起，但记住"它之前是开着的"
+        [self.menuPanel hide];
         if (self.statusPanel.isShown) [self.statusPanel hide];
     } else {
         [self.window makeKeyAndOrderFront:nil];
@@ -644,6 +656,7 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
 
 - (void)startDragForWindow:(NSWindow *)target {
     if (!target) return;
+    if (target == self.statusPanel.window) self.statusPanel.anchorRight = NO;
     self.pressing = YES;
     self.movedDuringPress = NO;
     self.dragTarget = target;
@@ -714,9 +727,14 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
     self.petHidden = [d boolForKey:kHiddenKey];
     if (!self.petHidden) [self.window makeKeyAndOrderFront:nil];
 
-    if ([d boolForKey:kStatusOpenKey] && !self.petHidden) {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{ [self showStatusPanel]; });
+    // 状态面板一律不自动打开，等用户主动选（见 PRD 5.2）
+    // QA 钩子：POPOHERE_OPEN_PANEL=status|menu 可在启动时直接开面板，方便核对几何
+    NSString *qa = [NSString stringWithUTF8String:getenv("POPOHERE_OPEN_PANEL") ?: ""];
+    if (qa.length) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            if ([qa isEqualToString:@"status"]) [self showStatusPanel];
+        });
     }
 }
 

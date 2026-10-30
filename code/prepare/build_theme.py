@@ -46,7 +46,7 @@ BEHAVIOR_DEFAULTS = {
     "scratch_cooldown_sec": 6,
     "click_max_drift_px": 5,
     "click_max_duration_ms": 300,
-    "menu_timeout_sec": 8,
+    "menu_timeout_sec": 120,   # 仅作兜底；菜单开着时不应自动睡
 }
 
 # 单一命中区：整只猫都是"撸它"

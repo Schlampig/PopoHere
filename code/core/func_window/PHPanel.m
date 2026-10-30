@@ -20,7 +20,7 @@
                                                  defer:NO];
     w.opaque = NO;
     w.backgroundColor = NSColor.clearColor;
-    w.hasShadow = NO;                  // 阴影交给 CSS，保证和圆角一致
+    w.hasShadow = YES;                 // 透明窗口的阴影会跟着内容 alpha（圆角）走
     w.level = NSFloatingWindowLevel;
     w.collectionBehavior = (NSWindowCollectionBehaviorCanJoinAllSpaces |
                             NSWindowCollectionBehaviorFullScreenAuxiliary);
@@ -32,6 +32,10 @@
     vev.blendingMode = NSVisualEffectBlendingModeBehindWindow;
     vev.state = NSVisualEffectStateActive;
     vev.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    // 关键：把毛玻璃裁成圆角，否则窗口 alpha 是方的，阴影也是方的
+    vev.wantsLayer = YES;
+    vev.layer.cornerRadius = 16.0;
+    vev.layer.masksToBounds = YES;
     w.contentView = vev;
 
     [[NSNotificationCenter defaultCenter] addObserver:self
@@ -97,12 +101,32 @@
 }
 
 - (void)showAtBottomRight {
+    self.anchorRight = YES;
     NSSize size = self.window.frame.size;
     NSRect vis = [NSScreen mainScreen].visibleFrame;
-    CGFloat x = NSMaxX(vis) - size.width - 20;
-    CGFloat y = NSMinY(vis) + 20;
+    // 紧贴屏幕右侧与底部
+    CGFloat x = NSMaxX(vis) - size.width;
+    CGFloat y = NSMinY(vis);
     [self.window setFrame:NSMakeRect(x, y, size.width, size.height) display:YES];
     [self.window orderFront:nil];                // 不抢焦点
+}
+
+/** 尺寸变了：菜单保持左上角不动，状态面板保持贴右下角；两者都不许跑出屏幕 */
+- (void)applySize:(NSSize)size {
+    NSRect vis = [NSScreen mainScreen].visibleFrame;
+    NSRect f = self.window.frame;
+    CGFloat top = NSMaxY(f);
+
+    f.size = size;
+    if (self.anchorRight) {
+        f.origin.x = NSMaxX(vis) - size.width;
+        f.origin.y = NSMinY(vis);
+    } else {
+        f.origin.y = top - size.height;
+    }
+    f.origin.x = MAX(NSMinX(vis), MIN(f.origin.x, NSMaxX(vis) - size.width));
+    f.origin.y = MAX(NSMinY(vis), MIN(f.origin.y, NSMaxY(vis) - size.height));
+    [self.window setFrame:f display:YES];
 }
 
 - (void)hide {
@@ -129,11 +153,7 @@
         CGFloat w = [body[@"width"] doubleValue];
         CGFloat h = [body[@"height"] doubleValue];
         if (w < 40 || h < 40) return;
-        NSRect f = self.window.frame;
-        CGFloat top = NSMaxY(f);                 // 保持左上角不动
-        f.size = NSMakeSize(w, h);
-        f.origin.y = top - h;
-        [self.window setFrame:f display:YES];
+        [self applySize:NSMakeSize(w, h)];
         return;
     }
     if ([type isEqualToString:@"panelDragStart"]) {

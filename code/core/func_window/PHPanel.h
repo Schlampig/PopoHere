@@ -19,6 +19,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong, readonly) WKWebView *web;
 @property (nonatomic, copy) NSString *view;          // "menu" / "status"
 @property (nonatomic) BOOL dismissOnResignKey;
+/** 状态面板：尺寸变化后仍贴住屏幕右下角 */
+@property (nonatomic) BOOL anchorRight;
 
 /** 面板里点了某个动作 */
 @property (nonatomic, copy) void (^onAction)(NSString *action, id _Nullable value);
