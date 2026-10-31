@@ -60,7 +60,6 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
 @property (nonatomic, strong) PHPanelController *statusPanel;
 @property (nonatomic, strong) PHPanelController *alertPanel;
 @property (nonatomic, strong) PHAlertController *alerts;
-@property (nonatomic, strong) NSMutableArray<PHReminder *> *alertQueue;
 @property (nonatomic, strong) PHReminderStore *reminders;
 @property (nonatomic, strong) PHChecklist *checklist;
 @property (nonatomic, strong) NSTimer *tickTimer;
@@ -202,12 +201,10 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
         [weakSelf pushSnapshotToPanels];
     };
 
-    // 到点提醒：独立窗口，右上角，10 秒自动关
+    // 到点提醒：独立窗口，右上角，多条叠在一起，各自 10 秒倒计时
     self.alertPanel = [[PHPanelController alloc] initWithView:@"alert"];
     self.alertPanel.dismissOnResignKey = NO;
-    self.alertQueue = [NSMutableArray array];
     self.alerts = [[PHAlertController alloc] initWithPanel:self.alertPanel seconds:10];
-    self.alerts.onDismiss = ^{ [weakSelf showNextAlert]; };
 }
 
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
@@ -228,29 +225,17 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
 
 #pragma mark - 到点提醒
 
-/* 提醒不依赖桌宠可见、也不依赖音频：到点就弹一个独立窗口。
-   多个同时到点时排队，一次只显示一条，避免糊成一片。 */
+/* 提醒不依赖桌宠可见、也不依赖音频：到点就弹独立窗口。
+   多条同时到点会**叠在一起**，各自倒计时、各自确认，先关哪条由用户决定。 */
 - (void)enqueueAlert:(PHReminder *)item {
     if (!item) return;
-    if (self.alerts.isShowing || self.alertQueue.count) {
-        [self.alertQueue addObject:item];
-        return;
-    }
     [self showAlertFor:item];
 }
 
 - (void)showAlertFor:(PHReminder *)item {
-    NSString *phrase = item.tip.length ? item.tip : item.name;
-    NSString *text = [NSString stringWithFormat:@"到时间了，请去%@！", phrase];
-    [self.alerts showText:text];
-}
-
-- (void)showNextAlert {
-    if (!self.alertQueue.count) return;
-    PHReminder *next = self.alertQueue.firstObject;
-    [self.alertQueue removeObjectAtIndex:0];
-    // 让上一帧的 hide 先落地，再显示下一条
-    dispatch_async(dispatch_get_main_queue(), ^{ [self showAlertFor:next]; });
+    NSString *text = item.message.length ? item.message
+                                         : [NSString stringWithFormat:@"到时间了，请去%@！", item.name];
+    [self.alerts pushText:text];
 }
 
 #pragma mark - JS → Native
@@ -431,6 +416,11 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
     } else if ([action isEqualToString:@"remMinus"] || [action isEqualToString:@"remPlus"]) {
         NSInteger delta = [action isEqualToString:@"remPlus"] ? 5 : -5;
         [self.reminders adjustMinutes:delta atIndex:[value integerValue]];
+        [self pushSnapshotToPanels];
+
+    } else if ([action isEqualToString:@"remRepeat"]) {
+        NSInteger idx = [value[@"index"] integerValue];
+        [self.reminders setRepeat:[value[@"on"] boolValue] atIndex:idx];
         [self pushSnapshotToPanels];
 
     } else if ([action isEqualToString:@"todoToggle"]) {
@@ -800,28 +790,35 @@ static void PHWalkMenu(NSMenu *menu, void (^apply)(NSMenuItem *)) {
 - (void)qaLogAlert:(NSString *)tag {
     NSRect f = self.alertPanel.window.frame;
     NSRect vis = [NSScreen mainScreen].visibleFrame;
-    NSLog(@"[QA-ALERT] %@ | shown=%d petHidden=%d frame=(%.0f,%.0f %.0fx%.0f) 右/上留白=(%.0f,%.0f)",
-          tag, self.alertPanel.isShown, self.petHidden,
+    NSLog(@"[QA-ALERT] %@ | shown=%d 卡片=%ld petHidden=%d frame=(%.0f,%.0f %.0fx%.0f) 右/上留白=(%.0f,%.0f)",
+          tag, self.alertPanel.isShown, (long)self.alerts.count, self.petHidden,
           f.origin.x, f.origin.y, f.size.width, f.size.height,
           NSMaxX(vis) - NSMaxX(f), NSMaxY(vis) - NSMaxY(f));
-    [self.alertPanel.web evaluateJavaScript:@"document.getElementById('alertText').textContent"
+    [self.alertPanel.web evaluateJavaScript:
+        @"Array.from(document.querySelectorAll('#alertList .txt')).map(function(e){return e.textContent}).join(' | ')"
                           completionHandler:^(id r, NSError *e) {
-        NSLog(@"[QA-ALERT] %@ | text=%@", tag, r ?: e);
+        NSLog(@"[QA-ALERT] %@ | 文案=%@", tag, r ?: e);
     }];
 }
 
 - (void)runQAAlert {
-    PHReminder *fake = [PHReminder new];
-    fake.name = @"喝水";
-    fake.tip = @"喝口水";
+    PHReminder *a = [PHReminder new];
+    a.name = @"摸鱼";
+    a.message = @"摸鱼结束，接着干活~";
+    PHReminder *b = [PHReminder new];
+    b.name = @"喝水";
+    b.message = @"到时间了，请去喝口水！";
 
     __weak typeof(self) weakSelf = self;
     struct { double at; NSString *what; } steps[] = {
-        {0.8, @"hide"},      // 先把桌宠藏起来：提醒必须照样弹
-        {1.2, @"show"},      {2.4, @"log:隐藏桌宠时弹出"},
-        {3.4, @"log:一秒后"}, {4.0, @"confirm"},
-        {4.6, @"log:确认后"}, {5.2, @"show"},
-        {15.4, @"log:自动关闭后"}, {15.8, @"unhide"},
+        {0.8, @"hide"},        // 先把桌宠藏起来：提醒必须照样弹
+        {1.2, @"pushA"},
+        {1.6, @"pushB"},       // 两条同时到点 → 应该叠在一起
+        {2.6, @"log:两条叠在一起"},
+        {3.2, @"confirm1"},    // 只关第一条
+        {3.8, @"log:关掉第一条后"},
+        {13.0, @"log:全部超时后"},
+        {13.4, @"unhide"},
     };
     for (size_t i = 0; i < sizeof(steps) / sizeof(steps[0]); i++) {
         double at = steps[i].at;
@@ -830,14 +827,16 @@ static void PHWalkMenu(NSMenu *menu, void (^apply)(NSMenuItem *)) {
                        dispatch_get_main_queue(), ^{
             __strong typeof(weakSelf) self = weakSelf;
             if (!self) return;
-            if ([w isEqualToString:@"show"]) {
-                [self showAlertFor:fake];
+            if ([w isEqualToString:@"pushA"]) {
+                [self showAlertFor:a];
+            } else if ([w isEqualToString:@"pushB"]) {
+                [self showAlertFor:b];
             } else if ([w isEqualToString:@"hide"]) {
                 [self setPetHidden:YES];
             } else if ([w isEqualToString:@"unhide"]) {
                 [self setPetHidden:NO];
-            } else if ([w isEqualToString:@"confirm"]) {
-                [self.alerts dismiss];       // 等价于点「确认」
+            } else if ([w isEqualToString:@"confirm1"]) {
+                [self.alerts dismissIdentifier:1];
             } else if ([w hasPrefix:@"log:"]) {
                 [self qaLogAlert:[w substringFromIndex:4]];
             }

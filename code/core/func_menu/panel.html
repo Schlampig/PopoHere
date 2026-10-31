@@ -88,18 +88,23 @@
   body[data-view="status"] .view-status{ display:block; }
   .view-status{ display:none; }
   body[data-view="status"] .panel{ width:248px; }
+  body[data-view="reminders"] .panel{ width:276px; }
 
   /* 到点提醒：一条文字 + 一个确认 */
   body[data-view="alert"] .view-menu{ display:none; }
   body[data-view="alert"] .view-alert{ display:block; }
   .view-alert{ display:none; }
   body[data-view="alert"] .panel{ width:264px; padding:14px 14px 12px; }
+  .view-alert .card{ display:flex; flex-direction:column; gap:9px; }
+  .view-alert .card + .card{
+    margin-top:11px; padding-top:11px; border-top:1px solid rgba(255,255,255,.08);
+  }
   .view-alert .txt{
     font-size:13px; line-height:1.55; color:var(--text-1); font-weight:500;
     letter-spacing:.2px; word-break:break-word;
   }
   .view-alert .btn{
-    margin-top:12px; height:30px;
+    height:30px;
     display:flex; align-items:center; justify-content:center;
     border-radius:var(--radius-item);
     background:rgba(143,174,155,.16); color:var(--accent);
@@ -128,6 +133,13 @@
   .stepper span{ width:18px; height:18px; line-height:17px; text-align:center;
                  border-radius:5px; background:rgba(255,255,255,.1); font-size:12px; }
   .stepper span:hover{ background:rgba(255,255,255,.2); }
+  /* 一次 / 间隔：两段式开关，当前模式高亮 */
+  .mode{ display:flex; gap:1px; padding:1px; border-radius:6px; background:rgba(255,255,255,.07); flex:none; }
+  .mode span{ padding:2px 5px; border-radius:5px; font-size:10.5px; color:var(--text-2);
+              line-height:1.4; }
+  .mode span:hover{ color:var(--text-1); }
+  .mode span.cur{ background:rgba(255,255,255,.14); color:var(--text-1); }
+  .mode span.cur[data-val="1"]{ background:rgba(143,174,155,.22); color:var(--accent); }
 
   /* 待办 */
   .todo{ display:flex; align-items:center; gap:8px; min-height:28px; padding:2px 8px; border-radius:7px; }
@@ -247,8 +259,7 @@
 
   <!-- ========== 到点提醒 ========== -->
   <div class="sub view-alert">
-    <div class="txt" id="alertText">到时间了</div>
-    <div class="btn" data-action="alertConfirm">确认</div>
+    <div id="alertList"></div>
   </div>
 
 </div>
@@ -263,7 +274,7 @@
     size: 220, sound: false, soundAvailable: false,
     autostart: false, petHidden: false, statusOpen: false,
     version: '2.0.0', state: 'idle', elapsed: 0,
-    states: [], reminders: [], todos: [],
+    states: [], reminders: [], todos: [], alerts: [],
   };
   let view = VIEW;
 
@@ -323,6 +334,10 @@
           <span class="mins">${r.minutes}′</span>
           <span data-rem-plus="${i}">＋</span>
         </div>
+        <div class="mode" title="间隔提醒：间隔=循环到你自己关掉，一次=响完就结束">
+          <span class="${r.repeat ? '' : 'cur'}" data-rem-repeat="${i}" data-val="0">一次</span>
+          <span class="${r.repeat ? 'cur' : ''}" data-rem-repeat="${i}" data-val="1">间隔</span>
+        </div>
       </div>`).join('');
   }
 
@@ -361,7 +376,12 @@
   }
 
   function renderAlert() {
-    document.getElementById('alertText').textContent = snapshot.alertText || '到时间了';
+    const list = snapshot.alerts || [];
+    document.getElementById('alertList').innerHTML = list.map(a => `
+      <div class="card">
+        <div class="txt">${escapeHtml(a.text)}（${a.sec}s）</div>
+        <div class="btn" data-alert-confirm="${a.id}">确认</div>
+      </div>`).join('');
   }
 
   function render() {
@@ -378,7 +398,14 @@
   document.addEventListener('click', (e) => {
     const row = e.target.closest('.row, .back, .close, .btn');
     const opt = e.target.closest('.opt');
-    const rem = e.target.closest('[data-rem-toggle],[data-rem-minus],[data-rem-plus]');
+    // 提醒卡片：先判，避免被下面的 row 逻辑吃掉
+    const alertBtn = e.target.closest('[data-alert-confirm]');
+    if (alertBtn) {
+      post({ type: 'action', action: 'alertConfirm', value: +alertBtn.dataset.alertConfirm });
+      return;
+    }
+
+    const rem = e.target.closest('[data-rem-toggle],[data-rem-minus],[data-rem-plus],[data-rem-repeat]');
     const todo = e.target.closest('[data-todo-toggle]');
     const force = e.target.closest('[data-force]');
 
@@ -389,6 +416,10 @@
       if (rem.dataset.remToggle !== undefined) post({ type: 'action', action: 'remToggle', value: +rem.dataset.remToggle });
       if (rem.dataset.remMinus !== undefined) post({ type: 'action', action: 'remMinus', value: +rem.dataset.remMinus });
       if (rem.dataset.remPlus !== undefined) post({ type: 'action', action: 'remPlus', value: +rem.dataset.remPlus });
+      if (rem.dataset.remRepeat !== undefined) {
+        post({ type: 'action', action: 'remRepeat',
+               value: { index: +rem.dataset.remRepeat, on: rem.dataset.val === '1' } });
+      }
       return;
     }
     if (todo) { post({ type: 'action', action: 'todoToggle', value: +todo.dataset.todoToggle }); return; }
@@ -428,13 +459,16 @@
   window.Panel = {
     update(next) { snapshot = Object.assign({}, snapshot, next); render(); },
     setView(v) { view = v; render(); },
-    /* 到点提醒的文案（含倒计时括号），由外壳每秒推一次 */
-    setAlert(text) { snapshot.alertText = text; if (view === 'alert') render(); },
+    /* 到点提醒的整叠卡片，由外壳每秒推一次 */
+    setAlerts(list) { snapshot.alerts = list; if (view === 'alert') render(); },
   };
 
   if (MOCK) {
     snapshot = {
-      alertText: '到时间了，请去喝口水！（7s）',
+      alerts: [
+        { id: 1, text: '摸鱼结束，接着干活~', sec: 7 },
+        { id: 2, text: '到时间了，请去喝口水！', sec: 3 },
+      ],
       size: 220, sound: false, soundAvailable: false, autostart: false,
       petHidden: false, statusOpen: true, version: '2.0.0',
       state: 'touch', elapsed: 1.2, streak: 7, threshold: 10,
@@ -444,9 +478,9 @@
         { id: 'landed', cn: '落地' },
       ],
       reminders: [
-        { name: '番茄钟', minutes: 25, enabled: true },
-        { name: '喝水', minutes: 45, enabled: true },
-        { name: '久坐拉伸', minutes: 60, enabled: false },
+        { name: '摸鱼', minutes: 25, enabled: true, repeat: false },
+        { name: '喝水', minutes: 45, enabled: true, repeat: true },
+        { name: '久坐拉伸', minutes: 60, enabled: false, repeat: false },
       ],
       todos: [
         { text: '把 PRD 第 7 章的设计变量落成 CSS', done: true },

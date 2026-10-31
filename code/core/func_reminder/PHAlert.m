@@ -1,20 +1,24 @@
 #import "PHAlert.h"
 
-/** 把字符串变成 JS 字面量（去掉 JSON 数组的外壳）。中文/全角括号都靠它转义 */
-static NSString *PHJSONString(NSString *text) {
-    NSData *data = [NSJSONSerialization dataWithJSONObject:@[text ?: @""] options:0 error:nil];
-    NSString *array = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-    if (array.length < 2) return @"\"\"";
-    return [array substringWithRange:NSMakeRange(1, array.length - 2)];
-}
+#pragma mark - 一条提醒
+
+@interface PHAlertEntry : NSObject
+@property (nonatomic) NSInteger ident;
+@property (nonatomic, copy) NSString *text;
+@property (nonatomic) NSInteger remaining;
+@end
+
+@implementation PHAlertEntry
+@end
+
+#pragma mark -
 
 @interface PHAlertController ()
 @property (nonatomic, strong) PHPanelController *panel;
 @property (nonatomic) NSInteger totalSeconds;
-@property (nonatomic) NSInteger remaining;
-@property (nonatomic, copy) NSString *baseText;
+@property (nonatomic) NSInteger nextIdent;
+@property (nonatomic, strong) NSMutableArray<PHAlertEntry *> *entries;
 @property (nonatomic, strong, nullable) NSTimer *timer;
-@property (nonatomic) BOOL closing;
 @end
 
 @implementation PHAlertController
@@ -24,63 +28,96 @@ static NSString *PHJSONString(NSString *text) {
     if (!self) return nil;
     _panel = panel;
     _totalSeconds = MAX(3, seconds);      // 太短会来不及看清
+    _entries = [NSMutableArray array];
+    _nextIdent = 1;
     __weak typeof(self) weakSelf = self;
     panel.onAction = ^(NSString *action, id value) {
-        if ([action isEqualToString:@"alertConfirm"]) [weakSelf dismiss];
+        if ([action isEqualToString:@"alertConfirm"]) {
+            [weakSelf dismissIdentifier:[value integerValue]];
+        }
     };
     return self;
 }
 
-#pragma mark - 显示
+#pragma mark - 追加
 
-- (void)showText:(NSString *)text {
-    self.baseText = text ?: @"到时间了";
-    self.remaining = self.totalSeconds;
-    self.closing = NO;
+- (void)pushText:(NSString *)text {
+    PHAlertEntry *e = [PHAlertEntry new];
+    e.ident = self.nextIdent++;
+    e.text = text ?: @"到时间了";
+    e.remaining = self.totalSeconds;
+    [self.entries addObject:e];
 
-    [self.panel setView:@"alert"];
-    [self.panel showAtTopRight];          // 右上角、不抢焦点、压在最前面
-    [self refreshText];
+    if (!self.panel.isShown) {
+        [self.panel setView:@"alert"];
+        [self.panel showAtTopRight];      // 右上角、不抢焦点、压在最前面
+    }
+    [self refresh];
     [self startTimer];
 }
 
-- (void)refreshText {
-    NSString *text = [NSString stringWithFormat:@"%@（%lds）", self.baseText, (long)self.remaining];
-    // 文案里有中文和全角括号，走 JSON 转义最稳
-    NSString *js = [NSString stringWithFormat:@"Panel && Panel.setAlert(%@)", PHJSONString(text)];
-    [self.panel invokeJS:js];
+- (void)refresh {
+    NSMutableArray *list = [NSMutableArray array];
+    for (PHAlertEntry *e in self.entries) {
+        [list addObject:@{ @"id": @(e.ident), @"text": e.text, @"sec": @(e.remaining) }];
+    }
+    NSData *data = [NSJSONSerialization dataWithJSONObject:list options:0 error:nil];
+    NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    [self.panel invokeJS:[NSString stringWithFormat:@"Panel && Panel.setAlerts(%@)", json]];
 }
 
 #pragma mark - 计时
 
 - (void)startTimer {
-    [self.timer invalidate];
+    if (self.timer) return;
     __weak typeof(self) weakSelf = self;
     self.timer = [NSTimer scheduledTimerWithTimeInterval:1.0 repeats:YES
                                                    block:^(NSTimer *t) { [weakSelf tick]; }];
 }
 
 - (void)tick {
-    if (self.remaining <= 1) {            // 显示到 1s 后关闭，不会停在 0s
-        [self dismiss];
+    NSMutableArray<PHAlertEntry *> *alive = [NSMutableArray array];
+    for (PHAlertEntry *e in self.entries) {
+        e.remaining -= 1;
+        if (e.remaining > 0) [alive addObject:e];   // 归零的直接丢掉
+    }
+    self.entries = alive;
+
+    if (!self.entries.count) {
+        [self closePanel];
         return;
     }
-    self.remaining -= 1;
-    [self refreshText];
+    [self refresh];
 }
 
 #pragma mark - 关闭
 
-- (void)dismiss {
-    if (self.closing) return;
-    self.closing = YES;
+- (void)dismissIdentifier:(NSInteger)ident {
+    NSMutableArray<PHAlertEntry *> *alive = [NSMutableArray array];
+    for (PHAlertEntry *e in self.entries) {
+        if (e.ident != ident) [alive addObject:e];
+    }
+    self.entries = alive;
+    if (!self.entries.count) {
+        [self closePanel];
+    } else {
+        [self refresh];                              // 剩下的继续各自倒计时
+    }
+}
+
+- (void)dismissAll {
+    [self.entries removeAllObjects];
+    [self closePanel];
+}
+
+- (void)closePanel {
     [self.timer invalidate];
     self.timer = nil;
     [self.panel hide];
-    if (self.onDismiss) self.onDismiss();
-    self.closing = NO;
+    if (self.onEmpty) self.onEmpty();
 }
 
 - (BOOL)isShowing { return self.panel.isShown; }
+- (NSInteger)count { return self.entries.count; }
 
 @end

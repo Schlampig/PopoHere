@@ -37,7 +37,8 @@ git push
 | 定时提醒 / 待办清单 | ✅ `func_reminder` / `func_checklist` |
 | 原生外壳 | ✅ 多模块编译，通用二进制 |
 | 真实素材（18 张） | ✅ 已替换，`code/pet_images/` 9 个状态 16 张贴图 |
-| 到点提醒弹窗 | ✅ `func_reminder/PHAlert`（右上角玻璃窗 / 10s 倒计时 / 确认 / 排队） |
+| 到点提醒弹窗 | ✅ `func_reminder/PHAlert`（右上角玻璃窗 / 10s 倒计时 / 确认 / **多条叠放**） |
+| 提醒模式 | ✅ 每条「一次 / 间隔」，默认一次；一次响过自动关闭 |
 | **真机视觉验证** | ⚠️ 见下方「未验证项」 |
 
 ### 未验证项（下次接手必看）
@@ -120,10 +121,13 @@ python3 code/prepare/make_placeholder_assets.py
 python3 code/build/build_web.py
 open code/build/out/preview.html          # 浏览器里带调试面板
 
-# 测试（改了状态机 / 输入 必跑，三条都要绿；后两条需要本机有 Google Chrome）
-node code/test/state_machine_test.js      # 60 条，纯逻辑
+# 测试（改了状态机 / 输入 / 提醒 必跑；后两条需要本机有 Google Chrome）
+node code/test/state_machine_test.js      # 58 条，纯逻辑
 python3 code/test/click_mash_test.py      # 9 条，连点翻脸（跑真实产物 + DOM 事件）
 python3 code/test/drag_tracking_test.py   # 7 条，拖拽跟手
+clang -fobjc-arc -framework Foundation -I code/core/func_reminder \
+  code/test/reminder_store_test.m code/core/func_reminder/PHReminder.m \
+  -o /tmp/remtest && /tmp/remtest          # 16 条，提醒存储/计时语义
 
 # 重新生成应用图标
 python3 code/build/make_icon.py
@@ -176,6 +180,20 @@ JS 用 `clientX` 算位移 + `postMessage` 移动窗口会形成**坐标系反�
 - `motion`：本项目新增字段，`none / breathe / breathe-slow / bob-walk / shake / float / drop`（CSS 动画，省掉逐帧素材）
 - `bubble`：可选 emoji 字符串（PRD 原设想气泡 PNG，改用 emoji 少一堆素材）
 - `hitBoxes`：相对比例，**原点在图片左上角**（PRD 示例用的是左下原点，此处有意不同）
+
+## 提醒模型（func_reminder）
+
+| 字段 | 含义 |
+|---|---|
+| `name` | 面板里显示的名字（摸鱼 / 喝水 / 久坐拉伸） |
+| `message` | 弹窗整句，不含倒计时（`摸鱼结束，接着干活~`） |
+| `minutes` | 间隔，永远落在 1 或 5 的倍数上 |
+| `enabled` | 总开关；**一次性提醒响完会自动置 NO** |
+| `repeat` | YES=间隔循环，NO=一次性 |
+
+- `tick` 每秒推进，**一轮只返回一个到点项**（同时到点的下一秒补上，正好叠成两条）
+- 多条提醒叠在同一个面板里，各自倒计时；全部关完才收面板
+- 测试用独立 `NSUserDefaults` suite（`initWithDefaults:`），别用 standardUserDefaults，会污染用户配置
 
 ## 状态机规则（v2.0）
 

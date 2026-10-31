@@ -9,14 +9,20 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface PHReminder : NSObject
 @property (nonatomic, copy) NSString *name;
-/** 弹窗里"请去 XXX"的 XXX。名字是名词（番茄钟）时直接拼句子会别扭，所以单独留一句短语 */
-@property (nonatomic, copy) NSString *tip;
+/** 到点时弹窗里的完整句子（不含倒计时）。名字是名词时直接拼句子会别扭，所以单独存一条文案 */
+@property (nonatomic, copy) NSString *message;
+/** YES = 间隔提醒（循环到用户自己关掉）；NO = 一次性（响过就自动关闭） */
+@property (nonatomic) BOOL repeat;
 @property (nonatomic) NSInteger minutes;
 @property (nonatomic) BOOL enabled;
 @property (nonatomic) NSInteger remaining;   // 秒
 @end
 
 @interface PHReminderStore : NSObject
+
+/** 默认用 standardUserDefaults；测试可传一个独立 suite，避免污染真实配置 */
+- (instancetype)initWithDefaults:(NSUserDefaults *)defaults NS_DESIGNATED_INITIALIZER;
+- (instancetype)init;
 
 - (NSArray<PHReminder *> *)items;
 - (NSInteger)runningCount;
@@ -26,6 +32,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)setEnabled:(BOOL)enabled atIndex:(NSInteger)index;
 - (void)setMinutes:(NSInteger)minutes atIndex:(NSInteger)index;
+- (void)setRepeat:(BOOL)repeat atIndex:(NSInteger)index;
 - (void)adjustMinutes:(NSInteger)delta atIndex:(NSInteger)index;
 
 /** 推进 1 秒；返回本轮到期的提醒项（没有则 nil） */
