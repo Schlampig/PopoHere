@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 
@@ -39,8 +40,14 @@ SRC = os.path.join(ROOT, "source", "origin_images")
 OUT_DIR = os.path.join(CODE, "pet_images")
 OTHER_DIR = os.path.join(CODE, "pet_others")
 OUT_QA = os.path.join(CODE, "build", "out", "qa_sheet.png")
+# 可选：纠正拍歪的照片。{"idle_3.png": 90} 表示逆时针转 90°，顺时针写 -90
+ORIENT_FILE = os.path.join(SRC, "orientation.json")
+# 可选：纠正拍歪的照片。{"idle_3.png": 90} 表示逆时针转 90°，顺时针写 -90
+ORIENT_FILE = os.path.join(SRC, "orientation.json")
 
 # 归一化画布：所有状态共用，底部对齐，避免切换状态时宠物跳动
+PATTERN = re.compile(r"^(?P<state>[a-z]+)(?:_(?P<idx>\d+))?$")
+
 CANVAS = 640
 MARGIN = 18
 MAX_WORK = 1600   # rembg 输入长边上限，兼顾速度与质量
@@ -83,16 +90,62 @@ def trim_and_normalize(out: Image.Image) -> Image.Image:
     return canvas
 
 
-def make_tray_icon(source: Image.Image) -> Image.Image:
-    """从一张抠好的图生成 macOS 菜单栏模板图标（纯黑 + alpha）。"""
-    size = 44   # 22pt @2x
+def make_tray_icon(source: Image.Image, size: int = 44) -> Image.Image:
+    """从一张抠好的图生成 macOS 菜单栏模板图标（纯黑 + alpha）。
+
+    关键：**先裁到内容再缩放**。之前直接在 640 画布上 thumbnail，
+    猫只占中间一小块，到菜单栏里就成了一个 8px 的小点。
+    """
     im = source.copy()
-    im.thumbnail((size, size), Image.LANCZOS)
-    alpha = im.split()[3]
+    bbox = im.split()[3].getbbox()
+    if bbox:
+        im = im.crop(bbox)
+
+    pad = 2                                  # 22pt 图标留一点呼吸
+    inner = size - pad * 2
+    im.thumbnail((inner, inner), Image.LANCZOS)
+
     icon = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     black = Image.new("RGBA", im.size, (0, 0, 0, 255))
-    icon.paste(black, ((size - im.width) // 2, (size - im.height) // 2), alpha)
+    icon.paste(black, ((size - im.width) // 2, (size - im.height) // 2), im.split()[3])
     return icon
+
+
+def harmonize(results: dict) -> None:
+    """同一状态里多张图，按"视觉面积"统一大小（只缩不放）。
+
+    逐张 fit-to-box 会让"躺着的猫"和"坐着的猫"占差不多的宽/高，切状态或重新抽帧时
+    看着像忽大忽小。用 alpha 面积当"体量"代理，把偏大的那几张缩到同状态的中位数。
+    只缩不放：放大一定会撞到画布边界、反而被裁。
+    """
+    groups: dict[str, list[str]] = {}
+    for stem in results:
+        m = PATTERN.match(stem)
+        if m:
+            groups.setdefault(m.group("state"), []).append(stem)
+
+    for state, stems in groups.items():
+        if len(stems) < 2:
+            continue
+        sizes = []
+        for stem in stems:
+            alpha = results[stem].split()[3]
+            sizes.append((stem, (sum(alpha.getdata()) / 255.0) ** 0.5))
+        # 取偏小的那个中位数：只缩不放，所以基准要往下靠，否则大图永远缩不下来
+        target = sorted(v for _, v in sizes)[(len(sizes) - 1) // 2]
+        for stem, value in sizes:
+            factor = target / value if value > 0 else 1.0
+            if factor >= 0.98:                    # 本来就小，不放大
+                continue
+            im = results[stem]
+            w, h = im.size
+            nw, nh = max(1, round(w * factor)), max(1, round(h * factor))
+            small = im.resize((nw, nh), Image.LANCZOS)
+            canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            canvas.paste(small, ((w - nw) // 2, h - nh), small)     # 底边对齐
+            results[stem] = canvas
+            canvas.save(os.path.join(OUT_DIR, f"{stem}.png"))
+            print(f"    归一 {stem:<14} ×{factor:.2f}")
 
 
 def save_qa_sheet(results: dict, path: str) -> None:
@@ -112,29 +165,97 @@ def save_qa_sheet(results: dict, path: str) -> None:
     sheet.save(path)
 
 
+def load_orientation() -> dict[str, int]:
+    """读可选的 orientation.json：文件名 → 逆时针角度。拍歪了不用重拍。"""
+    if not os.path.exists(ORIENT_FILE):
+        return {}
+    try:
+        with open(ORIENT_FILE, encoding="utf-8") as f:
+            raw = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"orientation.json 读不了（{e}），本次忽略", file=sys.stderr)
+        return {}
+    out = {}
+    for k, v in raw.items():
+        try:
+            out[os.path.basename(k)] = int(v)
+        except (TypeError, ValueError):
+            print(f"orientation.json 里 {k} 的角度不是整数，已忽略", file=sys.stderr)
+    return out
+
+
+def load_orientation() -> dict[str, int]:
+    """读可选的 orientation.json：文件名 → 逆时针角度。拍歪了不用重拍。"""
+    if not os.path.exists(ORIENT_FILE):
+        return {}
+    try:
+        with open(ORIENT_FILE, encoding="utf-8") as f:
+            raw = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"orientation.json 读不了（{e}），本次忽略", file=sys.stderr)
+        return {}
+    out = {}
+    for k, v in raw.items():
+        try:
+            out[os.path.basename(k)] = int(v)
+        except (TypeError, ValueError):
+            print(f"orientation.json 里 {k} 的角度不是整数，已忽略", file=sys.stderr)
+    return out
+
+
 def list_sources() -> list[str]:
     return sorted(
         f for f in os.listdir(SRC) if f.lower().endswith(".png") and not f.startswith(".")
     )
 
 
-def check(theme_path: str) -> int:
-    """校验：theme.json 里要的图，source 里是否都有对应原图。"""
-    with open(theme_path, encoding="utf-8") as f:
-        theme = json.load(f)
-    have = {os.path.splitext(f)[0] for f in list_sources()}
-    missing = []
-    for state, spec in theme["states"].items():
-        for visual in spec.get("visuals", []):
-            stem = os.path.splitext(visual)[0]
-            if stem not in have:
-                missing.append(f"{state} → {visual}")
+def check() -> int:
+    """校验命名：每张原图都要能对上状态表。
+
+    刻意**不读 theme.json**——那份文件是上一次运行的产物，换素材时它还是旧名字，
+    拿它校验新素材只会制造假报错。真正该守的规范是 build_theme.STATE_DEFAULTS。
+    """
+    from build_theme import STATE_DEFAULTS, NON_STATE
+
+    names = list_sources()
+    have = {os.path.splitext(f)[0] for f in names}
+    unknown, counter = [], {}
+
+    for stem in sorted(have):
+        m = PATTERN.match(stem)
+        if not m:
+            unknown.append(stem)
+            continue
+        state = m.group("state")
+        if state in NON_STATE:
+            continue
+        if state not in STATE_DEFAULTS:
+            unknown.append(stem)
+            continue
+        counter.setdefault(state, []).append(int(m.group("idx") or 1))
+
+    for state, idxs in sorted(counter.items()):
+        dup = {i for i in idxs if idxs.count(i) > 1}
+        if dup:
+            unknown.append(f"{state} 序号重复 {sorted(dup)}")
+
+    missing = [s for s in STATE_DEFAULTS
+               if s != "menu" and s not in counter]      # menu 可以复用别的姿势
+
+    print(f"共 {len(names)} 张原图，覆盖 {len(counter)} 个状态：")
+    for state in sorted(counter):
+        print(f"  {state:<10} {len(counter[state])} 张")
+
     if missing:
-        print("以下素材在 source/origin_images 里找不到：")
-        for m in missing:
-            print("  -", m)
+        print(f"\n⚠️  这些状态没有素材（运行时会被跳过）：{', '.join(missing)}")
+    if unknown:
+        print("\n❌ 以下文件不符合命名规范（应形如 touch_1.png）：")
+        for u in unknown:
+            print("  -", u)
         return 1
-    print(f"命名校验通过：{len(have)} 张原图覆盖了 theme.json 的全部状态")
+    if missing:
+        return 0
+    print("\n命名校验通过")
     return 0
 
 
@@ -143,9 +264,8 @@ def main() -> int:
     ap.add_argument("--check", action="store_true", help="只校验，不处理图片")
     args = ap.parse_args()
 
-    theme_path = os.path.join(OUT_DIR, "theme.json")
     if args.check:
-        return check(theme_path)
+        return check()
 
     if not os.path.isdir(SRC):
         print(f"找不到原始素材目录: {SRC}", file=sys.stderr)
@@ -161,20 +281,36 @@ def main() -> int:
     print("加载 u2net 模型…", flush=True)
     session = new_session("u2net")
 
+    orient = load_orientation()
     results = {}
     for name in files:
         stem = os.path.splitext(name)[0]
         t0 = time.time()
         img = Image.open(os.path.join(SRC, name)).convert("RGBA")
+        deg = orient.get(name, 0)
+        if deg:
+            img = img.rotate(deg, expand=True)     # 正数=逆时针
         norm = trim_and_normalize(cutout(img, session))
         norm.save(os.path.join(OUT_DIR, f"{stem}.png"))
         results[stem] = norm
-        print(f"OK  {stem:<16} {img.size} -> {norm.size}  ({time.time() - t0:.1f}s)", flush=True)
+        extra = f"  旋转{deg}°" if deg else ""
+        print(f"OK  {stem:<16} {img.size} -> {norm.size}  ({time.time() - t0:.1f}s){extra}", flush=True)
 
-    # 菜单栏图标优先用 menu 那张，没有就随便挑一张
-    tray_src = results.get("menu") or next(iter(results.values()))
+    harmonize(results)
+
+    # 清掉上一版遗留的贴图：新素材可能比旧的少几张，留着会被 build_theme 扫进去
+    produced = set(results)
+    stale = [f for f in os.listdir(OUT_DIR)
+             if f.lower().endswith(".png") and os.path.splitext(f)[0] not in produced]
+    for f in sorted(stale):
+        os.remove(os.path.join(OUT_DIR, f))
+    if stale:
+        print(f"清理旧贴图 {len(stale)} 张：{', '.join(sorted(stale))}")
+
+    # 菜单栏图标：优先 menubar，其次 menu，最后随便一张
+    tray_src = results.get("menubar") or results.get("menu") or next(iter(results.values()))
     make_tray_icon(tray_src).save(os.path.join(OTHER_DIR, "tray_icon.png"))
-    print("OK  tray_icon.png")
+    print("OK  tray_icon.png（菜单栏模板图标）")
 
     save_qa_sheet(results, OUT_QA)
     print(f"QA 总览图: {OUT_QA}")

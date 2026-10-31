@@ -23,6 +23,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic) BOOL dismissOnResignKey;
 /** 状态面板：尺寸变化后仍贴住屏幕右下角 */
 @property (nonatomic) BOOL anchorRight;
+/** 到点提醒：尺寸变化后仍贴住屏幕右上角 */
+@property (nonatomic) BOOL anchorTopRight;
 
 /** 面板里点了某个动作 */
 @property (nonatomic, copy) void (^onAction)(NSString *action, id _Nullable value);
@@ -37,6 +39,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)showAtPoint:(NSPoint)screenPoint;   // AppKit 屏幕坐标，面板左上角对齐该点
 - (void)showAtBottomRight;
+- (void)showAtTopRight;                     // 屏幕右上角，不抢焦点
+/** 给面板页面发一条 JS（页面侧只暴露 Panel.* 这几个 API） */
+- (void)invokeJS:(NSString *)js;
 - (void)hide;
 - (BOOL)isShown;
 

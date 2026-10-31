@@ -20,6 +20,14 @@ static NSInteger PHStepMinutesFrom(NSInteger current, NSInteger delta) {
     return current;
 }
 
+/** 老数据没有 tip：按名字补一个默认短语，别让弹窗读成"请去番茄钟" */
+static NSString *PHDefaultTip(NSString *name) {
+    if ([name isEqualToString:@"番茄钟"]) return @"专注工作";
+    if ([name isEqualToString:@"喝水"]) return @"喝口水";
+    if ([name isEqualToString:@"久坐拉伸"]) return @"拉伸一下";
+    return name;
+}
+
 /** 把历史数据里"1、6、11"这类错位值吸到最近的 5 的倍数（1 保留） */
 static NSInteger PHNormalizeMinutes(NSInteger m) {
     m = MAX(kMinMinutes, MIN(kMaxMinutes, m));
@@ -46,15 +54,16 @@ static NSInteger PHNormalizeMinutes(NSInteger m) {
 
 - (void)defaults {
     _list = [@[
-        [self makeName:@"番茄钟" minutes:25],
-        [self makeName:@"喝水" minutes:45],
-        [self makeName:@"久坐拉伸" minutes:60],
+        [self makeName:@"番茄钟" minutes:25 tip:@"专注工作"],
+        [self makeName:@"喝水" minutes:45 tip:@"喝口水"],
+        [self makeName:@"久坐拉伸" minutes:60 tip:@"拉伸一下"],
     ] mutableCopy];
 }
 
-- (PHReminder *)makeName:(NSString *)name minutes:(NSInteger)minutes {
+- (PHReminder *)makeName:(NSString *)name minutes:(NSInteger)minutes tip:(NSString *)tip {
     PHReminder *r = [PHReminder new];
     r.name = name;
+    r.tip = tip;
     r.minutes = minutes;
     r.enabled = NO;                 // 默认全关，不打扰
     r.remaining = minutes * 60;
@@ -69,6 +78,7 @@ static NSInteger PHNormalizeMinutes(NSInteger m) {
     for (NSDictionary *d in raw) {
         PHReminder *r = [PHReminder new];
         r.name = d[@"name"] ?: @"提醒";
+        r.tip = d[@"tip"] ?: PHDefaultTip(r.name);
         r.minutes = PHNormalizeMinutes([d[@"minutes"] integerValue]);
         r.enabled = [d[@"enabled"] boolValue];
         r.remaining = r.enabled ? r.minutes * 60 : r.minutes * 60;
@@ -81,6 +91,7 @@ static NSInteger PHNormalizeMinutes(NSInteger m) {
     NSMutableArray *raw = [NSMutableArray array];
     for (PHReminder *r in self.list) {
         [raw addObject:@{ @"name": r.name,
+                          @"tip": r.tip ?: r.name,
                           @"minutes": @(r.minutes),
                           @"enabled": @(r.enabled) }];
     }
@@ -103,6 +114,10 @@ static NSInteger PHNormalizeMinutes(NSInteger m) {
     [self save];
 }
 
++ (NSInteger)minutesFrom:(NSInteger)current delta:(NSInteger)delta {
+    return PHStepMinutesFrom(current, delta);
+}
+
 - (void)setMinutes:(NSInteger)minutes atIndex:(NSInteger)index {
     if (index < 0 || index >= (NSInteger)self.list.count) return;
     PHReminder *r = self.list[index];
@@ -117,13 +132,13 @@ static NSInteger PHNormalizeMinutes(NSInteger m) {
     [self setMinutes:next atIndex:index];
 }
 
-- (NSString *)tick {
-    NSString *due = nil;
+- (PHReminder *)tick {
+    PHReminder *due = nil;
     for (PHReminder *r in self.list) {
         if (!r.enabled) continue;
         r.remaining -= 1;
         if (r.remaining <= 0) {
-            due = r.name;               // 一轮只报一个，避免同时轰炸
+            due = r;                    // 一轮只报一个，避免同时轰炸
             r.remaining = r.minutes * 60;
             break;
         }

@@ -89,6 +89,26 @@
   .view-status{ display:none; }
   body[data-view="status"] .panel{ width:248px; }
 
+  /* 到点提醒：一条文字 + 一个确认 */
+  body[data-view="alert"] .view-menu{ display:none; }
+  body[data-view="alert"] .view-alert{ display:block; }
+  .view-alert{ display:none; }
+  body[data-view="alert"] .panel{ width:264px; padding:14px 14px 12px; }
+  .view-alert .txt{
+    font-size:13px; line-height:1.55; color:var(--text-1); font-weight:500;
+    letter-spacing:.2px; word-break:break-word;
+  }
+  .view-alert .btn{
+    margin-top:12px; height:30px;
+    display:flex; align-items:center; justify-content:center;
+    border-radius:var(--radius-item);
+    background:rgba(143,174,155,.16); color:var(--accent);
+    font-size:12.5px; font-weight:600; letter-spacing:.5px;
+    transition:background .12s ease;
+  }
+  .view-alert .btn:hover{ background:rgba(143,174,155,.26); }
+  .view-alert .btn:active{ background:rgba(143,174,155,.34); }
+
   .back{ display:flex; align-items:center; gap:6px; height:26px; padding:0 8px;
          color:var(--text-2); font-size:12px; border-radius:7px; }
   .back:hover{ background:var(--hover); color:var(--text-1); }
@@ -225,6 +245,12 @@
     </div>
   </div>
 
+  <!-- ========== 到点提醒 ========== -->
+  <div class="sub view-alert">
+    <div class="txt" id="alertText">到时间了</div>
+    <div class="btn" data-action="alertConfirm">确认</div>
+  </div>
+
 </div>
 
 <script>
@@ -334,6 +360,10 @@
     fs.classList.toggle('on', streak >= 2);
   }
 
+  function renderAlert() {
+    document.getElementById('alertText').textContent = snapshot.alertText || '到时间了';
+  }
+
   function render() {
     document.body.dataset.view = view;
     document.body.classList.toggle('reduce-transparency', !!snapshot.reduceTransparency);
@@ -341,11 +371,12 @@
     if (view === 'reminders') renderReminders();
     if (view === 'todos') renderTodos();
     if (view === 'status') renderStatus();
+    if (view === 'alert') renderAlert();
     resize();
   }
 
   document.addEventListener('click', (e) => {
-    const row = e.target.closest('.row, .back, .close');
+    const row = e.target.closest('.row, .back, .close, .btn');
     const opt = e.target.closest('.opt');
     const rem = e.target.closest('[data-rem-toggle],[data-rem-minus],[data-rem-plus]');
     const todo = e.target.closest('[data-todo-toggle]');
@@ -397,10 +428,13 @@
   window.Panel = {
     update(next) { snapshot = Object.assign({}, snapshot, next); render(); },
     setView(v) { view = v; render(); },
+    /* 到点提醒的文案（含倒计时括号），由外壳每秒推一次 */
+    setAlert(text) { snapshot.alertText = text; if (view === 'alert') render(); },
   };
 
   if (MOCK) {
     snapshot = {
+      alertText: '到时间了，请去喝口水！（7s）',
       size: 220, sound: false, soundAvailable: false, autostart: false,
       petHidden: false, statusOpen: true, version: '2.0.0',
       state: 'touch', elapsed: 1.2, streak: 7, threshold: 10,

@@ -1,5 +1,15 @@
 #import "PHPanel.h"
 
+/** 面板窗口通常不是 key window（提醒要是抢焦点就没法打字了），
+    默认实现会把"第一下点击"只用来激活窗口，用户会觉得按钮点不动。
+    让 WKWebView 接受 first mouse，点一下就生效。 */
+@interface PHFirstMouseWebView : WKWebView
+@end
+
+@implementation PHFirstMouseWebView
+- (BOOL)acceptsFirstMouse:(NSEvent *)event { return YES; }
+@end
+
 @implementation PHPanelController
 
 - (instancetype)initWithView:(NSString *)view {
@@ -51,7 +61,8 @@
     [ucc addScriptMessageHandler:self name:@"popo"];
     cfg.userContentController = ucc;
 
-    WKWebView *wv = [[WKWebView alloc] initWithFrame:self.window.contentView.bounds configuration:cfg];
+    WKWebView *wv = [[PHFirstMouseWebView alloc] initWithFrame:self.window.contentView.bounds
+                                                 configuration:cfg];
     wv.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     @try {
         [wv setValue:@NO forKey:@"drawsBackground"];
@@ -113,8 +124,26 @@
     if (self.onShow) self.onShow();
 }
 
+- (void)showAtTopRight {
+    self.anchorTopRight = YES;
+    self.anchorRight = NO;
+    NSSize size = self.window.frame.size;
+    NSRect vis = [NSScreen mainScreen].visibleFrame;
+    CGFloat x = NSMaxX(vis) - size.width - 16;
+    CGFloat y = NSMaxY(vis) - size.height - 16;
+    [self.window setFrame:NSMakeRect(x, y, size.width, size.height) display:YES];
+    [self.window orderFrontRegardless];      // 提醒要压住其它窗口，但不抢键盘焦点
+    if (self.onShow) self.onShow();
+}
+
+- (void)invokeJS:(NSString *)js {
+    if (!js.length || !self.web) return;
+    [self.web evaluateJavaScript:js completionHandler:nil];
+}
+
 - (void)showAtBottomRight {
     self.anchorRight = YES;
+    self.anchorTopRight = NO;
     NSSize size = self.window.frame.size;
     NSRect vis = [NSScreen mainScreen].visibleFrame;
     // 紧贴屏幕右侧与底部
@@ -132,7 +161,10 @@
     CGFloat top = NSMaxY(f);
 
     f.size = size;
-    if (self.anchorRight) {
+    if (self.anchorTopRight) {
+        f.origin.x = NSMaxX(vis) - size.width - 16;
+        f.origin.y = NSMaxY(vis) - size.height - 16;
+    } else if (self.anchorRight) {
         f.origin.x = NSMaxX(vis) - size.width;
         f.origin.y = NSMinY(vis);
     } else {

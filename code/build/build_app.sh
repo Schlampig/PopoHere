@@ -20,6 +20,7 @@ SOURCES=(
   "$SHELL_DIR/PHMain.m"
   "$SHELL_DIR/PHPanel.m"
   "$CODE_DIR/core/func_reminder/PHReminder.m"
+  "$CODE_DIR/core/func_reminder/PHAlert.m"
   "$CODE_DIR/core/func_checklist/PHChecklist.m"
 )
 INCLUDES=(-I "$SHELL_DIR" -I "$CODE_DIR/core/func_reminder" -I "$CODE_DIR/core/func_checklist")
@@ -42,7 +43,8 @@ echo "==> 3/4 组装 app 包"
 cp "$SHELL_DIR/Info.plist" "$CONTENTS/Info.plist"
 cp "$BUILD_DIR/out/native.html" "$CONTENTS/Resources/app/index.html"
 cp "$CODE_DIR/core/func_menu/panel.html" "$CONTENTS/Resources/app/panel.html"
-cp "$CODE_DIR/pet_images/menubar_1.png" "$CONTENTS/Resources/tray_icon.png"
+# 菜单栏图标：cutout.py 已裁到内容并做成模板图标（pet_images 里的是 640 画布，会变成一个小点）
+cp "$CODE_DIR/pet_others/tray_icon.png" "$CONTENTS/Resources/tray_icon.png"
 cp "$CODE_DIR/pet_others/AppIcon.icns" "$CONTENTS/Resources/AppIcon.icns"
 
 # 清除隔离属性，避免本机首次打开被 Gatekeeper 拦

@@ -5,6 +5,7 @@
 //
 //  功能模块各管各的：
 //    func_reminder/PHReminder     定时提醒
+//    func_reminder/PHAlert        到点弹窗（独立窗口，不依赖桌宠是否可见）
 //    func_checklist/PHChecklist   待办清单
 //    func_window/PHPanel          玻璃面板窗口
 //
@@ -17,6 +18,7 @@
 #import "PHPanel.h"
 #import "PHReminder.h"
 #import "PHChecklist.h"
+#import "PHAlert.h"
 
 static CGFloat const kPad = 16.0;             // 与 index.html 留白一致
 static CGFloat const kDragThreshold = 12.0;   // 与 theme.behavior.click_max_drift_px 保持一致
@@ -56,6 +58,9 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
 
 @property (nonatomic, strong) PHPanelController *menuPanel;
 @property (nonatomic, strong) PHPanelController *statusPanel;
+@property (nonatomic, strong) PHPanelController *alertPanel;
+@property (nonatomic, strong) PHAlertController *alerts;
+@property (nonatomic, strong) NSMutableArray<PHReminder *> *alertQueue;
 @property (nonatomic, strong) PHReminderStore *reminders;
 @property (nonatomic, strong) PHChecklist *checklist;
 @property (nonatomic, strong) NSTimer *tickTimer;
@@ -196,6 +201,13 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
         [weakSelf refreshMenuChecks];
         [weakSelf pushSnapshotToPanels];
     };
+
+    // 到点提醒：独立窗口，右上角，10 秒自动关
+    self.alertPanel = [[PHPanelController alloc] initWithView:@"alert"];
+    self.alertPanel.dismissOnResignKey = NO;
+    self.alertQueue = [NSMutableArray array];
+    self.alerts = [[PHAlertController alloc] initWithPanel:self.alertPanel seconds:10];
+    self.alerts.onDismiss = ^{ [weakSelf showNextAlert]; };
 }
 
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
@@ -209,27 +221,36 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
 #pragma mark - 提醒 / 状态刷新
 
 - (void)onTick:(NSTimer *)timer {
-    NSString *due = [self.reminders tick];
-    if (due) {
-        if (self.petHidden) {
-            [self notifyViaIcon:due];
-        } else {
-            NSString *js = [NSString stringWithFormat:@"App.notify('⏰ %@', 6000);", due];
-            [self.web evaluateJavaScript:js completionHandler:nil];
-        }
-    }
+    PHReminder *due = [self.reminders tick];
+    if (due) [self enqueueAlert:due];
     if (self.statusPanel.isShown) [self pushSnapshotToPanels];
 }
 
-- (void)notifyViaIcon:(NSString *)text {
-    // 猫被藏起来了就没有气泡可弹，退化成菜单栏图标的高亮提示
-    self.statusItem.button.toolTip = [NSString stringWithFormat:@"PopoHere · %@", text];
-    self.statusItem.button.appearsDisabled = YES;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        self.statusItem.button.appearsDisabled = NO;
-        self.statusItem.button.toolTip = @"PopoHere";
-    });
+#pragma mark - 到点提醒
+
+/* 提醒不依赖桌宠可见、也不依赖音频：到点就弹一个独立窗口。
+   多个同时到点时排队，一次只显示一条，避免糊成一片。 */
+- (void)enqueueAlert:(PHReminder *)item {
+    if (!item) return;
+    if (self.alerts.isShowing || self.alertQueue.count) {
+        [self.alertQueue addObject:item];
+        return;
+    }
+    [self showAlertFor:item];
+}
+
+- (void)showAlertFor:(PHReminder *)item {
+    NSString *phrase = item.tip.length ? item.tip : item.name;
+    NSString *text = [NSString stringWithFormat:@"到时间了，请去%@！", phrase];
+    [self.alerts showText:text];
+}
+
+- (void)showNextAlert {
+    if (!self.alertQueue.count) return;
+    PHReminder *next = self.alertQueue.firstObject;
+    [self.alertQueue removeObjectAtIndex:0];
+    // 让上一帧的 hide 先落地，再显示下一条
+    dispatch_async(dispatch_get_main_queue(), ^{ [self showAlertFor:next]; });
 }
 
 #pragma mark - JS → Native
@@ -746,6 +767,8 @@ static void PHWalkMenu(NSMenu *menu, void (^apply)(NSMenuItem *)) {
 
     // QA 钩子：POPOHERE_QA_SEQ=1 跑一遍「菜单开着 → 状态预览 → 该回哪」的回归
     if (getenv("POPOHERE_QA_SEQ")) [self runQASequence];
+    // QA 钩子：POPOHERE_QA_ALERT=1 验证到点弹窗（位置、倒计时、确认、自动关闭）
+    if (getenv("POPOHERE_QA_ALERT")) [self runQAAlert];
 }
 
 - (void)qaLog:(NSString *)tag {
@@ -754,24 +777,72 @@ static void PHWalkMenu(NSMenu *menu, void (^apply)(NSMenuItem *)) {
                completionHandler:^(id r, NSError *e) { NSLog(@"[QA] %@ | js=%@", tag, r ?: e); }];
 }
 
-/* 提醒的加减阶梯：1 → 5 → 10 … 再退回 1，验证不再出现 6/11 这种错位值 */
+/* 提醒的加减阶梯：1 → 5 → 10 … 再退回 1。
+   只做纯计算，**不写存储**——早先的版本会真的改用户的提醒时间，
+   两个实例同时跑还会互相覆盖。 */
 - (void)qaReminderLadder {
-    NSInteger idx = 0;
-    if (self.reminders.items.count == 0) return;
-    NSInteger original = self.reminders.items[idx].minutes;
-    [self.reminders setMinutes:1 atIndex:idx];
     NSMutableString *seq = [NSMutableString stringWithString:@"1 "];
+    NSInteger v = 1;
     for (int k = 0; k < 4; k++) {
-        [self.reminders adjustMinutes:5 atIndex:idx];
-        [seq appendFormat:@"%ld ", (long)self.reminders.items[idx].minutes];
+        v = [PHReminderStore minutesFrom:v delta:5];
+        [seq appendFormat:@"%ld ", (long)v];
     }
     [seq appendString:@"| "];
     for (int k = 0; k < 4; k++) {
-        [self.reminders adjustMinutes:-5 atIndex:idx];
-        [seq appendFormat:@"%ld ", (long)self.reminders.items[idx].minutes];
+        v = [PHReminderStore minutesFrom:v delta:-5];
+        [seq appendFormat:@"%ld ", (long)v];
     }
-    NSLog(@"[QA] 提醒阶梯（原值 %ld）：%@", (long)original, seq);
-    [self.reminders setMinutes:original atIndex:idx];
+    NSLog(@"[QA] 提醒阶梯（纯计算）：%@", seq);
+}
+
+#pragma mark - QA：到点弹窗
+
+- (void)qaLogAlert:(NSString *)tag {
+    NSRect f = self.alertPanel.window.frame;
+    NSRect vis = [NSScreen mainScreen].visibleFrame;
+    NSLog(@"[QA-ALERT] %@ | shown=%d petHidden=%d frame=(%.0f,%.0f %.0fx%.0f) 右/上留白=(%.0f,%.0f)",
+          tag, self.alertPanel.isShown, self.petHidden,
+          f.origin.x, f.origin.y, f.size.width, f.size.height,
+          NSMaxX(vis) - NSMaxX(f), NSMaxY(vis) - NSMaxY(f));
+    [self.alertPanel.web evaluateJavaScript:@"document.getElementById('alertText').textContent"
+                          completionHandler:^(id r, NSError *e) {
+        NSLog(@"[QA-ALERT] %@ | text=%@", tag, r ?: e);
+    }];
+}
+
+- (void)runQAAlert {
+    PHReminder *fake = [PHReminder new];
+    fake.name = @"喝水";
+    fake.tip = @"喝口水";
+
+    __weak typeof(self) weakSelf = self;
+    struct { double at; NSString *what; } steps[] = {
+        {0.8, @"hide"},      // 先把桌宠藏起来：提醒必须照样弹
+        {1.2, @"show"},      {2.4, @"log:隐藏桌宠时弹出"},
+        {3.4, @"log:一秒后"}, {4.0, @"confirm"},
+        {4.6, @"log:确认后"}, {5.2, @"show"},
+        {15.4, @"log:自动关闭后"}, {15.8, @"unhide"},
+    };
+    for (size_t i = 0; i < sizeof(steps) / sizeof(steps[0]); i++) {
+        double at = steps[i].at;
+        NSString *w = steps[i].what;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(at * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            if (!self) return;
+            if ([w isEqualToString:@"show"]) {
+                [self showAlertFor:fake];
+            } else if ([w isEqualToString:@"hide"]) {
+                [self setPetHidden:YES];
+            } else if ([w isEqualToString:@"unhide"]) {
+                [self setPetHidden:NO];
+            } else if ([w isEqualToString:@"confirm"]) {
+                [self.alerts dismiss];       // 等价于点「确认」
+            } else if ([w hasPrefix:@"log:"]) {
+                [self qaLogAlert:[w substringFromIndex:4]];
+            }
+        });
+    }
 }
 
 - (void)runQASequence {

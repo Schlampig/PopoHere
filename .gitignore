@@ -14,6 +14,12 @@ __pycache__/
 .venv/
 venv/
 
+# ---- 作者自己的原始照片（体积大且不对外分发；换素材时本地放这里）----
+source/origin_images/*.png
+source/origin_images/*.jpg
+source/origin_images/*.jpeg
+!source/origin_images/orientation.json
+
 # ---- 构建产物（都可由 code/build/ 下的脚本重新生成，不入库）----
 code/build/out/
 code/build/dist/

@@ -36,6 +36,8 @@ git push
 | 玻璃菜单 + 状态面板 | ✅ `PHPanel` + `panel.html`（NSVisualEffectView 毛玻璃） |
 | 定时提醒 / 待办清单 | ✅ `func_reminder` / `func_checklist` |
 | 原生外壳 | ✅ 多模块编译，通用二进制 |
+| 真实素材（18 张） | ✅ 已替换，`code/pet_images/` 9 个状态 16 张贴图 |
+| 到点提醒弹窗 | ✅ `func_reminder/PHAlert`（右上角玻璃窗 / 10s 倒计时 / 确认 / 排队） |
 | **真机视觉验证** | ⚠️ 见下方「未验证项」 |
 
 ### 未验证项（下次接手必看）
@@ -46,25 +48,30 @@ git push
 判断是会话/窗口服务器的隔离，不是代码问题——但**毛玻璃面板的实际观感、右键弹菜单的位置、
 状态面板的拖动手感，都还没被人工确认过**。拿到真实桌面后请优先验这三点。
 
-### 素材现状：⏸ 等用户拍真图（v2.0 代码已完工）
+### 素材现状：✅ 已是用户真实素材（2026-10-31 替换）
 
-`code/pet_images/` 里是**占位素材**（`make_placeholder_assets.py` 复制现有图生成，
-31 个引用只有 7 张不同）。用户会按 PRD 拍完整素材后一次性替换。
+`source/origin_images/` 18 张（9 个状态 + logo + menubar），`code/pet_images/` 16 张贴图。
+占位脚本 `make_placeholder_assets.py` 已删除。
 
-**替换时的固定流程**（顺序不能换）：
+**以后换素材的固定流程**（顺序不能换）：
 
 ```bash
 python3 code/prepare/cutout.py --check      # 1. 先只校验命名，不跑模型
 python3 code/prepare/cutout.py              # 2. 抠图 → 覆盖 code/pet_images/
 python3 code/prepare/build_theme.py         # 3. 扫文件名生成 theme.json
-rm code/prepare/make_placeholder_assets.py  # 4. 删掉占位脚本
-python3 code/build/build_web.py && ./code/build/build_app.sh   # 5. 重建
+python3 code/build/build_web.py && ./code/build/build_app.sh   # 4. 重建
 node code/test/state_machine_test.js && python3 code/test/click_mash_test.py \
   && python3 code/test/drag_tracking_test.py                   # 6. 三条测试要全绿
 ```
 
-替换后要重点手测：**各状态切换会不会"跳"（体型/地面线对不上）**、
-**同状态多帧之间的呼吸感**、**挠人/被撸是否终于长得不一样了**。
+预处理有两条"隐形规则"，改脚本前务必知道：
+
+- **同状态按视觉面积归一**（`harmonize()`）：同状态的几帧只缩不放，缩到偏小的中位数，
+  否则躺着和坐着的两帧看着像忽大忽小。实测同状态一致度 0.97–1.00（归一前 0.83–0.91）
+- **`source/origin_images/orientation.json`** 可以给单张图写旋转角度（正数逆时针）。
+  当前 `idle_3.png: 90`（手机导出时方向没转正）。这个配置是给用户用的通用能力，不是特例
+
+替换后要重点手测：**各状态切换会不会"跳"**、**同状态多帧的呼吸感**、**挠人/被撸是否不一样了**。
 
 ## 目录布局
 
@@ -81,7 +88,7 @@ code/core/                桌宠本体（只跟功能有关，与造型无关）
   func_render/              状态 → 贴图 / 动效 / 气泡
   func_input/               命中判定、单击 vs 拖拽
   func_menu/                右键菜单桥 + panel.html（玻璃面板 UI）
-  func_reminder/            定时提醒（ObjC，NSUserDefaults 持久化）
+  func_reminder/            定时提醒（PHReminder 计时 + PHAlert 到点弹窗）
   func_checklist/           待办清单（ObjC，JSON 持久化）
   func_window/              AppKit 外壳：窗口 / 菜单栏 / 拖拽 / 面板窗口
 code/build/               构建与打包脚本 + 产物（产物 gitignore）
@@ -129,6 +136,9 @@ python3 code/build/make_icon.py
 #   右键→menu → 进定时提醒(reminders) → 点猫收起 → 再右键应回到 menu
 #   → 预览 sleep → 应回 menu → 收起 → 提醒阶梯 1/5/10/15/20/15/10/5/1
 POPOHERE_QA_SEQ=1 code/build/dist/PopoHere.app/Contents/MacOS/PopoHere 2>&1 | grep "\[QA\]"
+
+# 到点弹窗自检（约 17s）：先隐藏桌宠 → 弹窗应照常出现 → 倒计时 → 确认 → 再弹 → 自动关闭
+POPOHERE_QA_ALERT=1 code/build/dist/PopoHere.app/Contents/MacOS/PopoHere 2>&1 | grep "QA-ALERT"
 
 # 打包发布 zip
 python3 code/build/package_release.py
