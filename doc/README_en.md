@@ -101,7 +101,7 @@ source/origin_images/
 ```
 
 Keep the background a **solid colour** — background removal is semantic segmentation, not a large model, and solid backdrops give the cleanest edges.
-Shot at a slight angle? Add the rotation to `orientation.json` instead of re-shooting. Full rules in [source/README.md](../source/README.md).
+**The photo's orientation is what you get** — nothing is rotated or flipped for you. Full rules in [source/README.md](../source/README.md).
 
 **② Run the preparation pipeline.**
 

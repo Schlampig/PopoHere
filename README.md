@@ -101,7 +101,8 @@ source/origin_images/
 ```
 
 背景尽量用**纯色**（白墙、纯色地板）——预处理是语义分割，不是大模型，纯色背景下边缘最干净。
-拍歪了不用重拍，写进 `orientation.json` 就能转正。完整规范见 [source/README.md](source/README.md)。
+**照片的方向就是最终效果**——程序不旋转、不翻转，你给什么姿势就摆什么姿势。
+完整规范见 [source/README.md](source/README.md)。
 
 **② 跑预处理。**
 

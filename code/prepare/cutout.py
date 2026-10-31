@@ -21,7 +21,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import sys
@@ -40,11 +39,6 @@ SRC = os.path.join(ROOT, "source", "origin_images")
 OUT_DIR = os.path.join(CODE, "pet_images")
 OTHER_DIR = os.path.join(CODE, "pet_others")
 OUT_QA = os.path.join(CODE, "build", "out", "qa_sheet.png")
-# 可选：纠正拍歪的照片。{"idle_3.png": 90} 表示逆时针转 90°，顺时针写 -90
-ORIENT_FILE = os.path.join(SRC, "orientation.json")
-# 可选：纠正拍歪的照片。{"idle_3.png": 90} 表示逆时针转 90°，顺时针写 -90
-ORIENT_FILE = os.path.join(SRC, "orientation.json")
-
 # 归一化画布：所有状态共用，底部对齐，避免切换状态时宠物跳动
 PATTERN = re.compile(r"^(?P<state>[a-z]+)(?:_(?P<idx>\d+))?$")
 
@@ -165,44 +159,6 @@ def save_qa_sheet(results: dict, path: str) -> None:
     sheet.save(path)
 
 
-def load_orientation() -> dict[str, int]:
-    """读可选的 orientation.json：文件名 → 逆时针角度。拍歪了不用重拍。"""
-    if not os.path.exists(ORIENT_FILE):
-        return {}
-    try:
-        with open(ORIENT_FILE, encoding="utf-8") as f:
-            raw = json.load(f)
-    except (json.JSONDecodeError, OSError) as e:
-        print(f"orientation.json 读不了（{e}），本次忽略", file=sys.stderr)
-        return {}
-    out = {}
-    for k, v in raw.items():
-        try:
-            out[os.path.basename(k)] = int(v)
-        except (TypeError, ValueError):
-            print(f"orientation.json 里 {k} 的角度不是整数，已忽略", file=sys.stderr)
-    return out
-
-
-def load_orientation() -> dict[str, int]:
-    """读可选的 orientation.json：文件名 → 逆时针角度。拍歪了不用重拍。"""
-    if not os.path.exists(ORIENT_FILE):
-        return {}
-    try:
-        with open(ORIENT_FILE, encoding="utf-8") as f:
-            raw = json.load(f)
-    except (json.JSONDecodeError, OSError) as e:
-        print(f"orientation.json 读不了（{e}），本次忽略", file=sys.stderr)
-        return {}
-    out = {}
-    for k, v in raw.items():
-        try:
-            out[os.path.basename(k)] = int(v)
-        except (TypeError, ValueError):
-            print(f"orientation.json 里 {k} 的角度不是整数，已忽略", file=sys.stderr)
-    return out
-
-
 def list_sources() -> list[str]:
     return sorted(
         f for f in os.listdir(SRC) if f.lower().endswith(".png") and not f.startswith(".")
@@ -281,20 +237,15 @@ def main() -> int:
     print("加载 u2net 模型…", flush=True)
     session = new_session("u2net")
 
-    orient = load_orientation()
     results = {}
     for name in files:
         stem = os.path.splitext(name)[0]
         t0 = time.time()
         img = Image.open(os.path.join(SRC, name)).convert("RGBA")
-        deg = orient.get(name, 0)
-        if deg:
-            img = img.rotate(deg, expand=True)     # 正数=逆时针
         norm = trim_and_normalize(cutout(img, session))
         norm.save(os.path.join(OUT_DIR, f"{stem}.png"))
         results[stem] = norm
-        extra = f"  旋转{deg}°" if deg else ""
-        print(f"OK  {stem:<16} {img.size} -> {norm.size}  ({time.time() - t0:.1f}s){extra}", flush=True)
+        print(f"OK  {stem:<16} {img.size} -> {norm.size}  ({time.time() - t0:.1f}s)", flush=True)
 
     harmonize(results)
 
