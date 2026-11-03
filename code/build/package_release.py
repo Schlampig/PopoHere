@@ -13,7 +13,9 @@
 排除内容：原始照片、构建中间产物、测试与开发脚本。
 发布包只包含运行所需的产物与面向使用者的说明。
 
-压缩用 ditto 而不是 zip：ditto 更擅长处理 bundle，能保住可执行位。
+压缩用 ditto 而不是 zip：ditto 更擅长处理 bundle，能保住可执行位与符号链接。
+必须在压缩前清除扩展属性，并关闭 resource fork / 隔离属性的打包，
+否则包内会出现 ._* 这类元数据文件，解压后散落一地。
 """
 
 from __future__ import annotations
@@ -88,12 +90,17 @@ def main() -> int:
     else:
         print("警告：没有 使用说明.md，包里会缺少说明文档", file=sys.stderr)
 
+    # 清除扩展属性：否则 ditto 会为每个带 xattr 的文件额外写入 ._* 元数据
+    subprocess.run(["xattr", "-cr", stage], check=False)
+
     os.makedirs(RELEASES, exist_ok=True)
     zpath = os.path.join(RELEASES, name + ".zip")
     if os.path.exists(zpath):
         os.remove(zpath)
-    # 不加 --sequesterRsrc：包内没有 resource fork，加了反而会多出一个 __MACOSX 目录
-    subprocess.run(["ditto", "-c", "-k", "--keepParent", stage, zpath], check=True)
+    # --norsrc/--noextattr/--noqtn：不打包 resource fork、扩展属性与隔离标记，
+    # 保证包内只有实际文件；--sequesterRsrc 会额外产生 __MACOSX，同样不使用。
+    subprocess.run(["ditto", "-c", "-k", "--keepParent",
+                    "--norsrc", "--noextattr", "--noqtn", stage, zpath], check=True)
 
     size_kb = os.path.getsize(zpath) / 1024
     print(f"生成 {zpath}  ({size_kb:.0f} KB)")
