@@ -33,7 +33,7 @@
   - [2.1.2 准备环境](#212-准备环境)
   - [2.1.3 跑预处理](#213-跑预处理)
   - [2.1.4 重新构建](#214-重新构建)
-  - [2.1.5 架构介绍](#215-架构介绍)
+- [2.2 架构介绍](#22-架构介绍)
 
 ---
 
@@ -608,9 +608,9 @@ clang -fobjc-arc -framework Foundation -I code/core/func_reminder \
   -o /tmp/remtest && /tmp/remtest          # 提醒计时语义，16 条
 ```
 
-### 2.1.5 架构介绍
+## 2.2 架构介绍
 
-#### 一句话概括
+### 一句话概括
 
 > 一个 Objective-C 的透明浮窗，里面嵌入一个 WebView；
 > 桌宠的全部行为由网页中的 JavaScript 状态机驱动。
@@ -636,14 +636,14 @@ clang -fobjc-arc -framework Foundation -I code/core/func_reminder \
 └─────────────────────────────────────────────┘
 ```
 
-#### 技术选型
+### 技术选型
 
 外壳使用 `clang + Objective-C + WebKit`：无需第三方依赖、产物约 1.2 MB、
 启动在半秒以内，并且可以直接复用 Web 技术做界面。
 把交互逻辑留在 JavaScript 中还有一个实际好处：修改行为不必重新编译原生外壳，
 `build_web.py` 十毫秒内即可完成构建，浏览器中可以直接看到效果。
 
-#### 各模块职责
+### 各模块职责
 
 | 模块 | 位置 | 职责 | 边界 |
 |---|---|---|---|
@@ -659,7 +659,7 @@ clang -fobjc-arc -framework Foundation -I code/core/func_reminder \
 状态机不引用任何 DOM API，因此可以直接用 Node 运行单元测试。
 这条边界建议保持：它是唯一能脱离图形界面做回归测试的地方。
 
-#### 数据流
+### 数据流
 
 ```
 theme.json ──┐
@@ -671,7 +671,7 @@ pet_images ──┘                      (图片转 base64 webp)
                 └── 原生模式 ──→ func_window（以屏幕坐标移动窗口）
 ```
 
-#### 拖拽：一个必须注意的坐标系问题
+### 拖拽：一个必须注意的坐标系问题
 
 **症状**：拖动时画面剧烈抖动，光标与桌宠之间有延迟。
 
@@ -695,7 +695,7 @@ pet_images ──┘                      (图片转 base64 webp)
 **回归测试**：`code/test/drag_tracking_test.py` 专门构造「`clientX` 不变、
 只有 `screenX` 递增」的场景，覆盖上述约束。
 
-#### theme.json：状态与贴图的契约
+### theme.json：状态与贴图的契约
 
 ```jsonc
 {
@@ -729,7 +729,7 @@ pet_images ──┘                      (图片转 base64 webp)
 `bubble` 使用文字或 emoji 而非图片，也是出于同样的成本考虑。
 这两个字段都可以按桌宠类型调整：例如用于爬行动物时，可把呼吸动效调慢、去掉气泡。
 
-#### 构建管线
+### 构建管线
 
 ```
 source/origin_images/*.png
@@ -750,7 +750,7 @@ code/build/releases/PopoHere-<版本>.zip
 贴图在 `build_web.py` 阶段就已内联为 data URI，因此应用包内不再保留一份
 `pet_images` 副本。
 
-#### 签名与分发
+### 签名与分发
 
 - 构建末尾执行 `codesign --force --sign -`（ad-hoc 签名）并校验。
   签名必须在组装完包之后进行，否则会出现「code has no resources but signature
@@ -759,7 +759,7 @@ code/build/releases/PopoHere-<版本>.zip
 - 使用 `ditto` 打包时不要加 `--sequesterRsrc`：包内没有 resource fork，
   加上该参数只会多出一个 `__MACOSX` 目录。
 
-#### 目录结构
+### 目录结构
 
 ```
 PopoHere/

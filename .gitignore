@@ -44,7 +44,7 @@ code/build/site/
 *.app
 *.dmg
 
-# ---- 本地工具链状态（含本机绝对路径）----
+# ---- 本地工具生成的目录与临时文件 ----
 .workbuddy/
 .wbapp_*.genie
 

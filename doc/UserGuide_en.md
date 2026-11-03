@@ -34,7 +34,7 @@ so jump to whichever you need.
   - [2.1.2 Prepare the Environment](#212-prepare-the-environment)
   - [2.1.3 Run the Preparation Pipeline](#213-run-the-preparation-pipeline)
   - [2.1.4 Rebuild](#214-rebuild)
-  - [2.1.5 Architecture](#215-architecture)
+- [2.2 Architecture](#22-architecture)
 
 ---
 
@@ -650,9 +650,9 @@ clang -fobjc-arc -framework Foundation -I code/core/func_reminder \
   -o /tmp/remtest && /tmp/remtest          # reminder timing semantics, 16 assertions
 ```
 
-### 2.1.5 Architecture
+## 2.2 Architecture
 
-#### In one sentence
+### In one sentence
 
 > A borderless transparent NSWindow with a WebView inside; every behaviour of the pet is
 > driven by a JavaScript state machine running in that page.
@@ -680,7 +680,7 @@ clang -fobjc-arc -framework Foundation -I code/core/func_reminder \
 └─────────────────────────────────────────────┘
 ```
 
-#### Technology choice
+### Technology choice
 
 The shell uses `clang + Objective-C + WebKit`: no third-party dependencies, roughly 1.2 MB
 on disk, launches in well under half a second, and lets the interface be built with web
@@ -688,7 +688,7 @@ technologies. Keeping the interaction logic in JavaScript has a practical benefi
 changing behaviour does not require recompiling the native shell — `build_web.py` finishes
 in milliseconds and the result is visible directly in a browser.
 
-#### Module responsibilities
+### Module responsibilities
 
 | Module | Location | Responsibility | Boundary |
 |---|---|---|---|
@@ -705,7 +705,7 @@ The state machine references no DOM API, which is why it can be unit-tested dire
 Node. Keeping that boundary is recommended: it is the only part that can be regression
 tested without a graphical interface.
 
-#### Data flow
+### Data flow
 
 ```
 theme.json ──┐
@@ -717,7 +717,7 @@ user input ─→ func_input ─→ PetStateMachine ─→ func_render ─→ DO
                  └─ native mode ──→ func_window (moves the window in screen coordinates)
 ```
 
-#### Dragging: a coordinate-system trap worth knowing
+### Dragging: a coordinate-system trap worth knowing
 
 **Symptom**: while dragging, the image shakes violently and lags behind the cursor.
 
@@ -745,7 +745,7 @@ cursor moves right 10px → window moves right 10px → cursor is 10px back insi
 **Regression test**: `code/test/drag_tracking_test.py` constructs exactly the
 "`clientX` constant, `screenX` increasing" situation to lock this behaviour in.
 
-#### theme.json: the state/sprite contract
+### theme.json: the state/sprite contract
 
 ```jsonc
 {
@@ -780,7 +780,7 @@ assets; `bubble` uses text or emoji rather than images for the same reason. Both
 be adapted to other kinds of pets — for a reptile, for instance, slow the breathing down and
 drop the bubbles.
 
-#### Build pipeline
+### Build pipeline
 
 ```
 source/origin_images/*.png
@@ -801,7 +801,7 @@ code/build/releases/PopoHere-<version>.zip
 Sprites are inlined as data URIs during `build_web.py`, so the app bundle contains no second
 copy of `pet_images`.
 
-#### Signing and distribution
+### Signing and distribution
 
 - The build ends with `codesign --force --sign -` (ad-hoc) followed by verification.
   Signing must happen after the bundle is assembled, otherwise macOS reports
@@ -811,7 +811,7 @@ copy of `pet_images`.
 - Do not pass `--sequesterRsrc` to `ditto` when packaging: the bundle has no resource fork,
   and the flag only adds a `__MACOSX` directory.
 
-#### Directory layout
+### Directory layout
 
 ```
 PopoHere/
