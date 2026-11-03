@@ -1,13 +1,20 @@
-//  PopoHere —— macOS 原生外壳。
+//  PopoHere · macOS 原生外壳
 //
-//  透明的宠物浮窗 + WKWebView（猫的行为在 Web 里）+ 菜单栏图标 + 两个玻璃面板。
-//  这个文件只负责"外壳"：窗口、拖拽、菜单、持久化、提醒计时。
+//  职责
+//    承载桌宠Popo的透明浮窗与 WKWebView，管理菜单栏图标、玻璃面板、
+//    窗口拖拽、偏好持久化与定时提醒的驱动。桌宠的行为逻辑位于 Web 层，
+//    本文件只负责「外壳」相关的能力。
 //
-//  功能模块各管各的：
-//    func_reminder/PHReminder     定时提醒
-//    func_reminder/PHAlert        到点弹窗（独立窗口，不依赖桌宠是否可见）
-//    func_checklist/PHChecklist   待办清单
-//    func_window/PHPanel          玻璃面板窗口
+//  组成
+//    func_window/PHPanel          玻璃面板窗口（右键菜单 / 状态面板 / 到点提醒共用）
+//    func_reminder/PHReminder     提醒的时间计算与持久化
+//    func_reminder/PHAlert        到点提醒的窗口编排（独立于桌宠是否可见）
+//    func_checklist/PHChecklist   待办清单的存储与增删
+//
+//  与 Web 层的边界
+//    Web 侧通过 window.webkit.messageHandlers.popo 上报事件，外壳通过
+//    evaluateJavaScript 调用 window.App.* 读取状态或下发指令。两侧共享的
+//    唯一事实是 theme.json 中的状态定义。
 //
 //  编译方式见 code/build/build_app.sh
 
@@ -253,7 +260,8 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
     } else if ([type isEqualToString:@"jserror"]) {
         NSLog(@"PopoHere JS 异常: %@", b[@"message"]);
     } else if ([type isEqualToString:@"menuPanelClose"]) {
-        // 状态机已经离开 menu（例如点猫），面板必须跟着收，保证两者同生共死
+        // 状态机已离开 menu（例如点击了桌宠），菜单面板必须同步收起，
+        // 以保证「menu 状态」与「菜单面板」始终同时存在、同时消失
         if (self.menuPanel.isShown) [self.menuPanel hide];
     } else if ([type isEqualToString:@"openMenu"]) {
         [self openMenuAtX:[b[@"x"] doubleValue] y:[b[@"y"] doubleValue]];
@@ -455,11 +463,11 @@ static NSArray<NSArray<NSString *> *> *StateCatalog(void) {
 #pragma mark - 桌宠显隐 / 状态面板
 
 - (void)setPetHidden:(BOOL)hidden {
-    _petHidden = hidden;          // 注意：不能写 self.petHidden，会无限递归
+    _petHidden = hidden;          // 必须直接写实例变量：访问 self.petHidden 会再次进入本 setter
     [[NSUserDefaults standardUserDefaults] setBool:hidden forKey:kHiddenKey];
     if (hidden) {
         [self.window orderOut:nil];
-        // 面板从属于桌宠：一起收起，但记住"它之前是开着的"
+        // 状态面板从属于桌宠：一并收起，同时保留用户的开启意愿，恢复显示时还原
         [self.menuPanel hide];
         if (self.statusPanel.isShown) [self.statusPanel hide];
     } else {
@@ -744,146 +752,7 @@ static void PHWalkMenu(NSMenu *menu, void (^apply)(NSMenuItem *)) {
     self.petHidden = [d boolForKey:kHiddenKey];
     if (!self.petHidden) [self.window makeKeyAndOrderFront:nil];
 
-    // 状态面板一律不自动打开，等用户主动选（见 PRD 5.2）
-    // QA 钩子：POPOHERE_OPEN_PANEL=status|menu 可在启动时直接开面板，方便核对几何
-    NSString *qa = [NSString stringWithUTF8String:getenv("POPOHERE_OPEN_PANEL") ?: ""];
-    if (qa.length) {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            if ([qa isEqualToString:@"status"]) [self showStatusPanel];
-            if ([qa isEqualToString:@"menu"]) [self openMenuAtX:200 y:300];
-        });
-    }
-
-    // QA 钩子：POPOHERE_QA_SEQ=1 跑一遍「菜单开着 → 状态预览 → 该回哪」的回归
-    if (getenv("POPOHERE_QA_SEQ")) [self runQASequence];
-    // QA 钩子：POPOHERE_QA_ALERT=1 验证到点弹窗（位置、倒计时、确认、自动关闭）
-    if (getenv("POPOHERE_QA_ALERT")) [self runQAAlert];
-}
-
-- (void)qaLog:(NSString *)tag {
-    NSLog(@"[QA] %@ | view=%@ shown=%d", tag, self.menuPanel.view, self.menuPanel.isShown);
-    [self.web evaluateJavaScript:@"App.state() + ' streak=' + App.streak() + ' menuOpen=' + App.menuOpen()"
-               completionHandler:^(id r, NSError *e) { NSLog(@"[QA] %@ | js=%@", tag, r ?: e); }];
-}
-
-/* 提醒的加减阶梯：1 → 5 → 10 … 再退回 1。
-   只做纯计算，**不写存储**——早先的版本会真的改用户的提醒时间，
-   两个实例同时跑还会互相覆盖。 */
-- (void)qaReminderLadder {
-    NSMutableString *seq = [NSMutableString stringWithString:@"1 "];
-    NSInteger v = 1;
-    for (int k = 0; k < 4; k++) {
-        v = [PHReminderStore minutesFrom:v delta:5];
-        [seq appendFormat:@"%ld ", (long)v];
-    }
-    [seq appendString:@"| "];
-    for (int k = 0; k < 4; k++) {
-        v = [PHReminderStore minutesFrom:v delta:-5];
-        [seq appendFormat:@"%ld ", (long)v];
-    }
-    NSLog(@"[QA] 提醒阶梯（纯计算）：%@", seq);
-}
-
-#pragma mark - QA：到点弹窗
-
-- (void)qaLogAlert:(NSString *)tag {
-    NSRect f = self.alertPanel.window.frame;
-    NSRect vis = [NSScreen mainScreen].visibleFrame;
-    NSLog(@"[QA-ALERT] %@ | shown=%d 卡片=%ld petHidden=%d frame=(%.0f,%.0f %.0fx%.0f) 右/上留白=(%.0f,%.0f)",
-          tag, self.alertPanel.isShown, (long)self.alerts.count, self.petHidden,
-          f.origin.x, f.origin.y, f.size.width, f.size.height,
-          NSMaxX(vis) - NSMaxX(f), NSMaxY(vis) - NSMaxY(f));
-    [self.alertPanel.web evaluateJavaScript:
-        @"Array.from(document.querySelectorAll('#alertList .txt')).map(function(e){return e.textContent}).join(' | ')"
-                          completionHandler:^(id r, NSError *e) {
-        NSLog(@"[QA-ALERT] %@ | 文案=%@", tag, r ?: e);
-    }];
-}
-
-- (void)runQAAlert {
-    PHReminder *a = [PHReminder new];
-    a.name = @"摸鱼";
-    a.message = @"摸鱼结束，接着干活~";
-    PHReminder *b = [PHReminder new];
-    b.name = @"喝水";
-    b.message = @"到时间了，请去喝口水！";
-
-    __weak typeof(self) weakSelf = self;
-    struct { double at; NSString *what; } steps[] = {
-        {0.8, @"hide"},        // 先把桌宠藏起来：提醒必须照样弹
-        {1.2, @"pushA"},
-        {1.6, @"pushB"},       // 两条同时到点 → 应该叠在一起
-        {2.6, @"log:两条叠在一起"},
-        {3.2, @"confirm1"},    // 只关第一条
-        {3.8, @"log:关掉第一条后"},
-        {13.0, @"log:全部超时后"},
-        {13.4, @"unhide"},
-    };
-    for (size_t i = 0; i < sizeof(steps) / sizeof(steps[0]); i++) {
-        double at = steps[i].at;
-        NSString *w = steps[i].what;
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(at * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            __strong typeof(weakSelf) self = weakSelf;
-            if (!self) return;
-            if ([w isEqualToString:@"pushA"]) {
-                [self showAlertFor:a];
-            } else if ([w isEqualToString:@"pushB"]) {
-                [self showAlertFor:b];
-            } else if ([w isEqualToString:@"hide"]) {
-                [self setPetHidden:YES];
-            } else if ([w isEqualToString:@"unhide"]) {
-                [self setPetHidden:NO];
-            } else if ([w isEqualToString:@"confirm1"]) {
-                [self.alerts dismissIdentifier:1];
-            } else if ([w hasPrefix:@"log:"]) {
-                [self qaLogAlert:[w substringFromIndex:4]];
-            }
-        });
-    }
-}
-
-- (void)runQASequence {
-    __weak typeof(self) weakSelf = self;
-    struct { double at; NSString *what; } steps[] = {
-        {1.0, @"open"},         {1.6, @"log:右键菜单"},
-        {2.0, @"reminders"},    {2.6, @"log:进入定时提醒"},
-        {3.2, @"clickCat"},     {3.8, @"log:点猫收起后"},
-        {4.4, @"open"},         {5.0, @"log:再次右键"},
-        {5.6, @"preview"},      {6.2, @"log:预览中"},
-        {12.2, @"log:预览结束"}, {12.8, @"close"},
-        {13.4, @"log:收起后"},   {13.8, @"ladder"},
-    };
-    for (size_t i = 0; i < sizeof(steps) / sizeof(steps[0]); i++) {
-        double at = steps[i].at;
-        NSString *w = steps[i].what;       // block 不能捕获 C 数组
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(at * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            __strong typeof(weakSelf) self = weakSelf;
-            if (!self) return;
-            if ([w isEqualToString:@"open"]) {
-                [self openMenuAtX:400 y:300];
-            } else if ([w isEqualToString:@"reminders"]) {
-                [self performAction:@"viewReminders" value:nil];
-            } else if ([w isEqualToString:@"preview"]) {
-                [self.web evaluateJavaScript:@"App.preview('sleep')" completionHandler:nil];
-            } else if ([w isEqualToString:@"clickCat"]) {
-                // 模拟一次真实单击：走完整的 JS 输入 → 状态机 → 原生联动
-                [self.web evaluateJavaScript:
-                    @"(function(){var p=document.getElementById('pet');"
-                     "p.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,button:0,screenX:10,screenY:10}));"
-                     "window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0,screenX:10,screenY:10}));"
-                     "})()" completionHandler:nil];
-            } else if ([w isEqualToString:@"close"]) {
-                [self.menuPanel hide];
-            } else if ([w isEqualToString:@"ladder"]) {
-                [self qaReminderLadder];
-            } else if ([w hasPrefix:@"log:"]) {
-                [self qaLog:[w substringFromIndex:4]];
-            }
-        });
-    }
+    // 状态面板不自动打开，由用户从菜单中主动开启
 }
 
 - (void)screenChanged:(NSNotification *)n {

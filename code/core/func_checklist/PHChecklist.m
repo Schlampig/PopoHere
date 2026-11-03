@@ -1,3 +1,13 @@
+//  PopoHere · 待办清单的存储实现
+//
+//  职责
+//    以 JSON 文件保存条目（路径见 PHChecklist.h），提供增、删、勾选与清空。
+//    条数上限与单条字数上限在头文件中定义，超出部分会被截断或拒绝。
+//
+//  说明
+//    本模块只处理数据，不做任何界面渲染；界面由 panel.html 的待办视图负责。
+
+
 #import "PHChecklist.h"
 
 @interface PHChecklist ()

@@ -1,4 +1,19 @@
 <!DOCTYPE html>
+<!--
+  PopoHere · 页面外壳模板
+
+  职责
+    提供桌宠页面所需的 DOM 结构与样式：桌面背景、贴图容器、气泡、命中区、
+    以及浏览器预览模式下的调试面板。行为逻辑全部位于 code/core/ 下的 JS 模块。
+
+  构建方式
+    code/build/build_web.py 会读取本文件，把 __IMAGES__ / __THEME__ / __CORE_JS__
+    三处占位符替换为内联数据，产出单文件 HTML。
+    body.native 类在打包进 .app 时生效，用于隐藏调试面板与模拟桌面。
+
+  修改提示
+    此处只放结构与样式；新增交互请放到对应的 func_* 模块。
+-->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -25,7 +40,7 @@
   #menubar .left span { margin-right: 14px; }
   #menubar .right span { margin-left: 12px; opacity: .75; }
 
-  /* ---- 原生模式：打包进 .app 时只留猫，不显示调试面板和假桌面 ---- */
+  /* ---- 原生模式：打包进 .app 时只保留桌宠贴图，隐藏调试面板与模拟桌面 ---- */
   body.native #desktop { background: none; }
   body.native #menubar, body.native #panel { display: none; }
   #stage { position: absolute; inset: 0; }
@@ -115,7 +130,7 @@
   </div>
 
   <div id="panel">
-    <h3>🔧 调试面板（正式版没有）</h3>
+    <h3>🔧 调试面板（仅浏览器预览可见）</h3>
     <div id="hint">拖拽 = 抱起 · 单击 = 撸它（连撸 10 次会翻脸）· 右键菜单在正式版可用<br>静置 5 秒会自己玩或睡觉</div>
     <div class="row"><span class="k">当前状态</span><span class="v" id="vState">idle</span></div>
     <div class="row"><span class="k">已停留</span><span class="v" id="vElapsed">0.0s</span></div>

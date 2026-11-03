@@ -4,42 +4,43 @@
 
 # PopoHere
 
-**A cat that lives on your Mac desktop.**
+**Let the lovely Popo cat move into your Mac desktop~**
 
-Turn your own pet into a desktop companion — drop a few photos in a folder, and it does the rest.
+Let Popo be your desktop pet and little assistant. Or turn your own companion into a desktop pet — just take a few photos, drop them into a folder, and Popo handles the rest.
 
-[![macOS](https://img.shields.io/badge/macOS-11%2B-black?logo=apple&logoColor=white)](#install)
+[![macOS](https://img.shields.io/badge/macOS-11%2B-black?logo=apple&logoColor=white)](#how-to-get-it)
 [![Version](https://img.shields.io/badge/version-2.0.0-8FAE9B)](#)
 [![License](https://img.shields.io/badge/license-MIT-blue)](../LICENSE)
 [![Dependencies](https://img.shields.io/badge/dependencies-none-success)](#)
 
-[Install](#install) · [How to play](#how-to-play) · [Make your own](#make-your-own) · [中文](../README.md)
+[How to get it](#how-to-get-it) · [How to use](#how-to-use) · [Make it your own](#make-it-your-own) · [中文](../README.md) · [MIT](../LICENSE)
 
-<img src="assets/hero.png" width="100%" alt="PopoHere on a Mac desktop">
+<img src="assets/concept.png" width="100%" alt="PopoHere concept preview">
+
+<sub>Note: concept preview; the real thing looks slightly different.</sub>
 
 </div>
 
 ---
 
-## What it is
+## Who is Popo
 
-A macOS desktop pet. No Dock icon, no focus stealing, no network — it just sits on your screen:
-breathing, wandering, falling asleep, flailing when you pick it up, and getting annoyed if you pet it too much.
+PopoHere is a macOS desktop pet. It takes no Dock icon, never steals focus, never goes online — it just sits quietly on your screen: breathing, wandering, lying down to sleep, flailing its four paws when you pick it up, and getting annoyed if you pet it too much.
 
-The original is **Popo**, a British Shorthair (those are her photos). The whole app is **1.2 MB** with zero network code.
+This is a lightweight desktop pet built by the developer, with the help of the large models DeepSeek V4.1-flash-1017, Hy4 preview, Seedream4.5 and Workbuddy, for their own lovely (7 kg and dieting) American Shorthair named Pocky, nicknamed Popo. Popo is a quiet, soothing soul: while we work at our desks, she quietly climbs onto her own little red plastic chair, dozes there, or simply watches us in silence. Through this small project, we hope more people can become friends with Popo.
 
-## Why it's not just a looping GIF
+## What makes PopoHere interesting
 
 | | |
 |---|---|
-| 🧠 **An actual state machine** | idle / petting / annoyed / playing / sleeping / startled / landing, with cat-like probability transitions — not one animation on repeat |
-| 🖐 **Drag that keeps up** | the window is moved natively using **screen coordinates**, not by chasing the cursor from JS — there's a classic feedback-loop trap here, see [ARCHITECTURE](ARCHITECTURE.md) |
+| 🧠 **A real state machine** | idle / petting / annoyed / playing / sleeping / startled / landing, with cat-like probability transitions — not one animation on repeat |
+| 🖐 **Drag that keeps up** | the window is moved natively using **screen coordinates**, not by chasing the cursor from JS — there is a classic feedback-loop trap here, see the [User Guide](UserGuide_en.md#dragging-a-coordinate-system-trap-worth-knowing) |
 | 🎲 **Multiple images per state** | drop several frames in a state; one is picked at random and locked until you leave and come back |
 | ⏰ **Reminders don't need the cat** | a standalone popup fires even when the pet is hidden, with no audio and no animation |
-| 🪶 **Zero dependencies** | Objective-C + one WebView, universal binary (Intel / Apple Silicon), starts in under half a second |
-| 🎨 **Swap in your own pet** | no code changes — two commands regenerate every asset |
+| 🪶 **Zero dependencies** | Objective-C + one WebView, universal binary (Intel / Apple silicon), starts in under half a second |
+| 🎨 **Swap in your own pet** | no code changes — a few commands regenerate every asset |
 
-## Install
+## How to get it
 
 **Requires macOS 11 (Big Sur) or later.**
 
@@ -56,34 +57,38 @@ The original is **Popo**, a British Shorthair (those are her photos). The whole 
 > xattr -dr com.apple.quarantine /Applications/PopoHere.app
 > ```
 
-## How to play
+For system requirements, installation details and how to handle the warning, see [User Guide 1.1 Installation and Launch](UserGuide_en.md#11-installation-and-launch).
+
+## How to use
+
+**Interacting with it**
 
 | What you want | What to do |
 |---|---|
-| Move it | **Drag** the cat; let go and it lands on its own |
 | Pet it | Click once; **10 rapid clicks** and it swipes at you |
+| Move it | **Drag** the cat; let go and it lands on its own |
 | Wake it | Poke it while it's asleep |
 | Do nothing | After 5 seconds it wanders off or flops down |
 | Open the menu | **Right-click** the cat, or click the cat icon in the **menu bar** |
-| See what it's doing | Open the status panel from the menu — you can preview every state |
 
-Position and size are remembered between launches.
-
-## Reminders
+**Reminders**
 
 Right-click → **Reminders**. Three presets: **slack off 25 min / drink water 45 min / stretch 60 min**, all off by default.
+Each can be set to **Once** (fires once and stops) or **Repeat** (keeps firing until you turn it off).
+When due, a small panel appears in the **top-right corner**; click **Confirm** to close it, or it dismisses itself
+after 10 seconds. Several reminders due together stack in one panel, and it still works while the pet is hidden.
 
-- Time steps by **1 → 5 → 10 → 15…** (never 6 or 11)
-- Each row has a **once / repeat** switch:
-  - **Once** (default): fires once, then switches itself off
-  - **Repeat**: keeps firing at the interval until you turn it off
-- When due, a small panel appears in the **top-right corner**: `到时间了，请去喝口水！（7s）` — click **确认** to close, or it dismisses itself after 10 seconds
-- **Multiple reminders stack**, and you choose which one to close first
-- Works even when the pet is hidden
+**To-do list**
 
-## Make your own
+Right-click → **To-do list**. Up to 10 items of 50 characters each, check items off, clear the list at any time,
+stored locally.
 
-No coding required.
+For the full list of controls, default values and state meanings, see [User Guide 1.3 Features](UserGuide_en.md#13-features).
+
+## Make it your own
+
+This project opens up its entire architecture and code: you can build on it for secondary development, or use the
+current code with your own assets to build your own desktop pet — no coding required. Here are the quick steps:
 
 **① Prepare photos.** 8–16 shots of your pet, same camera and lighting if possible. Drop them into `source/origin_images/`:
 
@@ -100,8 +105,9 @@ source/origin_images/
 └── menubar_1.png     menu bar silhouette
 ```
 
-Keep the background a **solid colour** — background removal is semantic segmentation, not a large model, and solid backdrops give the cleanest edges.
-**The photo's orientation is what you get** — nothing is rotated or flipped for you. Full rules in [source/README.md](../source/README.md).
+Keep the background a **solid colour** — background removal is semantic segmentation, not a large model, and solid
+backdrops give the cleanest edges.
+**The photo's orientation is what you get** — nothing is rotated or flipped for you.
 
 **② Run the preparation pipeline.**
 
@@ -120,46 +126,8 @@ python3 code/prepare/build_theme.py        # scan filenames into theme.json
 
 `code/build/dist/PopoHere.app` is now your own pet.
 
-## Under the hood
-
-```text
-Objective-C shell (AppKit)
-├── transparent borderless window + WKWebView
-├── NSStatusItem menu bar / glass panels (NSVisualEffectView)
-└── NSEvent local monitor → screen-coordinate dragging
-
-Web layer (vanilla JS, no framework)
-├── func_state    state machine (pure logic, no DOM → testable in Node)
-├── func_render   state → sprite / motion / bubble
-├── func_input    hit testing, click vs drag
-└── func_menu     panel UI
-
-Preparation (Python + rembg)
-└── cutout → normalize → per-state size matching → theme.json
-```
-
-<details>
-<summary><b>Development & tests</b></summary>
-
-```bash
-# Browser preview with a debug panel
-python3 code/build/build_web.py && open code/build/out/preview.html
-
-# Tests: state machine 58 · rapid clicks 9 · dragging 7 · reminder store 16
-node code/test/state_machine_test.js
-python3 code/test/click_mash_test.py
-python3 code/test/drag_tracking_test.py
-clang -fobjc-arc -framework Foundation -I code/core/func_reminder \
-  code/test/reminder_store_test.m code/core/func_reminder/PHReminder.m -o /tmp/remtest && /tmp/remtest
-
-# Build / package
-./code/build/build_app.sh
-python3 code/build/package_release.py
-```
-
-Before touching the code, read [AGENTS.md](../AGENTS.md); design decisions and traps are in [ARCHITECTURE.md](ARCHITECTURE.md), the full spec in the [PRD](PRD/PRD.md).
-
-</details>
+For asset specs, supported extensions and naming rules, environment setup and common errors, see
+[User Guide 2.1 Steps](UserGuide_en.md#21-steps).
 
 ## FAQ
 
@@ -177,8 +145,6 @@ Before touching the code, read [AGENTS.md](../AGENTS.md); design decisions and t
 
 <div align="center">
 
-The cat is real. The code is open source. Go make it yours.
-
-[MIT](../LICENSE) · [中文](../README.md)
+May Popo keep you company through every calm, fulfilling and inspired day.
 
 </div>

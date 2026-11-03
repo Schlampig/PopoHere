@@ -1,15 +1,17 @@
 /* PopoHere · 鼠标输入
  *
- * 负责：命中判定（头/脚/空白）、单击 vs 拖拽的区分、抱起时的位移。
- * 不负责：状态怎么流转（交给状态机）、画面怎么画（交给渲染器）。
+ * 职责
+ *   1. 命中判定：换算主题里的相对坐标，决定点击落在哪个区域；
+ *   2. 区分单击与拖拽：位移与时长同时满足阈值才计为单击；
+ *   3. 抱起时的位移：网页预览模式直接移动 DOM，原生模式交由外壳处理。
  *
- * 一条重要约定（详见 AGENTS.md「拖拽为什么会抖」）：
- *   - 位移一律用**屏幕坐标** e.screenX / e.screenY 计算。
- *   - 原生模式下这里不移动任何东西，只把"按下/松开"两个事件告诉外壳，
- *     真正的窗口移动由 Objective-C 侧用 NSEvent 屏幕坐标同步完成。
- *     曾经用 clientX 逐帧发包，会因视口随窗口移动形成反馈环 → 抖动。
+ * 坐标约定（与 doc/UserGuide.md「拖拽」一节对应）
+ *   位移一律使用屏幕坐标 screenX / screenY 计算。原因是原生模式下移动的是
+ *   「承载页面的窗口」本身，视口会随窗口一起位移，clientX 因此无法反映真实位移。
+ *   原生模式下本模块只上报 press / release 两个事件，窗口位移由外壳用
+ *   NSEvent 的屏幕坐标同步完成。
  *
- * 对外暴露：Popo.createInput({ ... })
+ * 对外暴露：Popo.createInput({ el, theme, machine, native, post, ... })
  */
 (function (root) {
   root.Popo = root.Popo || {};
@@ -22,14 +24,13 @@
     const post = opts.post || function () {};
     const getSize = opts.getSize;
     const getDefaultPos = opts.getDefaultPos;
-    const setPos = opts.setPos;
 
     const drag = {
-      active: false, startX: 0, startY: 0, dist: 0, t0: 0, region: 'blank',
+      active: false, startX: 0, startY: 0, dist: 0, t0: 0,
       baseLeft: 0, baseTop: 0,
     };
 
-    // v2.0 起只有一个命中区：整只猫都是"撸它"
+    // 单一命中区：整只桌宠都是可点击区域，不区分部位
     function layoutHitboxes() {
       const r = theme.hitBoxes.body;
       const size = getSize();
@@ -52,14 +53,14 @@
 
       machine.pressStart('body');
 
-      // 记录起始位置：仅网页预览模式用得到（原生模式由外壳用屏幕坐标接管）
+      // 起始位置仅在网页预览模式下使用；原生模式的位移由外壳接管
       if (!native) {
         const dp = getDefaultPos();
         drag.baseLeft = parseFloat(el.pet.style.left) || dp.left;
         drag.baseTop = parseFloat(el.pet.style.top) || dp.top;
       }
 
-      // 原生模式只通知"按下开始"，之后的位移由外壳跟踪
+      // 原生模式仅上报按下事件，后续位移由外壳跟踪
       if (native) post({ type: 'press' });
     });
 
@@ -71,7 +72,7 @@
       const carrying = machine.pressMove(drag.dist);   // 只推进状态机，不负责移动
 
       if (carrying && !native) {
-        // 网页预览模式：自己挪 DOM
+        // 网页预览模式：直接移动 DOM
         const size = getSize();
         const maxL = el.stage.clientWidth - size;
         const maxT = el.stage.clientHeight - size;
@@ -91,7 +92,7 @@
 
     window.addEventListener('mouseup', finishPress);
 
-    // 兜底：应用失去焦点时收不到 mouseup，否则"按下"会卡住，之后所有点击都被吞掉
+    // 兜底：网页失去焦点时收不到 mouseup，若不处理会导致按压状态卡死，后续点击全部失效
     window.addEventListener('blur', finishPress);
 
     return { layoutHitboxes: layoutHitboxes };

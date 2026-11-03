@@ -1,7 +1,13 @@
-/* PopoHere · 渲染器
+/* PopoHere · 渲染层
  *
- * 负责：状态 → 贴图 / 动效 class / 气泡，以及原型调试面板的数值回显。
- * 不负责：窗口、鼠标、状态流转。
+ * 职责
+ *   把状态机的输出映射到 DOM：贴图 src、动效 class、气泡文案，
+ *   并回显调试面板中的运行指标（状态名 / 停留时长 / 冷却剩余）。
+ *   状态切换只在状态名变化时触发一次重绘；动效与气泡随状态切换整体替换。
+ *
+ * 不负责
+ *   窗口位置、鼠标事件、状态流转规则，这些分别由 func_window / func_input /
+ *   func_state 承担。
  *
  * 对外暴露：Popo.createRenderer({ el, images, machine, onTransition })
  */
@@ -54,7 +60,7 @@
     function render() {
       if (overrideBubble && performance.now() > overrideUntil) {
         overrideBubble = null;
-        renderedState = null;      // 逼下一帧重画气泡
+        renderedState = null;      // 置空以触发下一帧重绘气泡
       }
       const st = machine.state;
       if (st !== renderedState) {
@@ -62,7 +68,7 @@
         renderedState = st;
         paintPet();
       }
-      // carrying 会在同一状态内变化（例如 startled 播放期间仍被抱着），每帧同步一次最省心
+      // 被拎起标记可能在状态内部变化（例如 startled 播放期间仍被握住），逐帧同步
       if (el.pet) el.pet.classList.toggle('carrying', !!machine._carrying);
       paintDebug();
     }

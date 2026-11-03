@@ -5,13 +5,13 @@
 
 包内结构（顶层是一个文件夹，避免解压后文件散落一地）：
 
-    PopoHere-v0.1.0/
+    PopoHere-<版本>/
     ├── PopoHere.app
-    ├── 启动 PopoHere.command      清掉 Gatekeeper 标记后启动，给不熟悉右键打开的人用
+    ├── 启动 PopoHere.command      清除 Gatekeeper 标记后启动，供不熟悉右键打开的用户使用
     └── 使用说明.md
 
-刻意不放的内容：原始素材（几十 MB 且不宜外传）、归档、tools/tests 等工程文件。
-给普通朋友的就是"双击能用"三件套。
+排除内容：原始照片、构建中间产物、测试与开发脚本。
+发布包只包含运行所需的产物与面向使用者的说明。
 
 压缩用 ditto 而不是 zip：ditto 更擅长处理 bundle，能保住可执行位。
 """
@@ -82,7 +82,7 @@ def main() -> int:
         f.write(LAUNCHER)
     os.chmod(launcher, 0o755)
 
-    manual = os.path.join(ROOT, "doc", "usage_zh.md")
+    manual = os.path.join(ROOT, "doc", "UserGuide.md")
     if os.path.exists(manual):
         shutil.copy2(manual, os.path.join(stage, "使用说明.md"))
     else:

@@ -1,9 +1,17 @@
-/* PopoHere · 入口
+/* PopoHere · 页面入口
  *
- * 把状态机、渲染器、输入、菜单拼起来，跑主循环。
- * 这一层只做装配和全局状态（尺寸/位置/日志），具体逻辑都在 func_* 里。
+ * 职责
+ *   装配状态机、渲染层、输入层与菜单桥，并驱动主循环（requestAnimationFrame）。
+ *   同时把尺寸、位置、调试面板等页面级状态收敛在这一层，供各模块回调。
+ *   具体行为逻辑位于 func_state / func_render / func_input / func_menu。
  *
- * 依赖构建时注入的三个常量：POPO_THEME / POPO_IMAGES / POPO_NATIVE
+ * 两种运行模式
+ *   POPO_NATIVE 为真：页面运行在 .app 的 WKWebView 内，窗口由外壳管理，
+ *                     这里只负责把事件与状态同步给外壳。
+ *   POPO_NATIVE 为假：浏览器预览模式，页面自己摆放桌宠并显示调试面板。
+ *
+ * 构建期注入的常量
+ *   POPO_THEME（状态与行为参数）、POPO_IMAGES（贴图 data URI）、POPO_NATIVE（运行模式）
  */
 (function () {
   const NATIVE = (typeof POPO_NATIVE !== 'undefined') && POPO_NATIVE;
@@ -32,9 +40,9 @@
 
   const machine = new Popo.PetStateMachine(THEME, {
     onTransition: (from, to) => {
-      // 离开 menu 就一定让外壳把面板收掉。不能只依赖"面板失焦自己隐藏"：
-      // 点猫时状态可能先走、面板还留在屏幕上，又变成两边不同步。
-      // 例外是状态预览：菜单可以开着让用户逐个试状态，预览结束还会回 menu。
+      // 离开 menu 时同步收起菜单面板：状态切换可能先于面板收起发生，
+      // 仅依赖面板失焦自动隐藏会造成状态与面板不一致。
+      // 状态预览是例外——菜单保持打开，便于用户逐个查看状态。
       if (from === 'menu' && to !== 'menu' && !machine.previewing) {
         post({ type: 'menuPanelClose' });
       }
@@ -44,7 +52,7 @@
   let petSize = NATIVE ? Math.max(60, window.innerWidth - 16) : 230;
   let lastFrame = performance.now();
 
-  /* 原生模式下把消息发给 Objective-C 外壳 */
+  /* 原生模式下向 Objective-C 外壳发送消息 */
   function post(msg) {
     if (NATIVE && window.webkit && window.webkit.messageHandlers &&
         window.webkit.messageHandlers.popo) {
@@ -56,7 +64,7 @@
     post({ type: 'jserror', message: String(e.message) + ' @ ' + e.filename + ':' + e.lineno });
   });
 
-  /* ---- 原型专用：日志 ---- */
+  /* ---- 浏览器预览专用：日志 ---- */
   const logs = [];
   function log(msg) {
     if (!el.log) return;
@@ -74,7 +82,7 @@
     el.pet.style.top = top + 'px';
   }
 
-  /* ---- 装配三大件 ---- */
+  /* ---- 装配各功能模块 ---- */
   const renderer = Popo.createRenderer({
     el: el,
     images: IMAGES,
@@ -92,7 +100,6 @@
     post: post,
     getSize: () => petSize,
     getDefaultPos: defaultPos,
-    setPos: setPos,
   });
 
   const menu = Popo.createMenu({
@@ -113,14 +120,18 @@
 
   /* ---- 主循环 ---- */
   function loop(now) {
-    const dt = Math.min(0.25, (now - lastFrame) / 1000);
+    // 步长限制在 [0, 0.25] 秒：
+    //   上限避免窗口被挂起或标签页切回时一次性推进过多；
+    //   下限避免首帧 rAF 时间戳早于初始化时刻，产生负值时把单调时钟推成负数，
+    //   进而使冷却判定把「尚未开始冷却」误判为「正在冷却」。
+    const dt = Math.min(0.25, Math.max(0, (now - lastFrame) / 1000));
     lastFrame = now;
     machine.tick(dt);
     renderer.render();
     requestAnimationFrame(loop);
   }
 
-  /* ---- 原型调试面板 ---- */
+  /* ---- 浏览器预览专用：调试面板 ---- */
   function buildDebugPanel() {
     if (el.forceBtns) {
       Object.keys(THEME.states).forEach((name) => {
@@ -152,7 +163,7 @@
     setSize(petSize);
     if (NATIVE) {
       setPos(8, 8);
-      // 原生窗口尺寸由外壳决定，窗口变化时把猫重新撑满
+      // 原生窗口尺寸由外壳决定；窗口变化时让贴图重新铺满
       window.addEventListener('resize', () => setSize(Math.max(60, window.innerWidth - 16)));
     } else {
       const dp = defaultPos();
@@ -161,17 +172,17 @@
     }
     input.layoutHitboxes();
     renderer.render();
-    if (!NATIVE) log('原型启动');
+    if (!NATIVE) log('预览启动');
   }
 
   init();
   requestAnimationFrame(loop);
 
-  /* 外壳（菜单栏）通过这些方法控制猫 */
+  /* 外壳通过以下接口控制桌宠与读取运行状态 */
   window.App = {
     show: (v) => { el.pet.classList.toggle('hidden', !v); },
     notify: (text, ms) => renderer.flashBubble(text, ms),
-    // 菜单状态由外壳唯一驱动：面板显示 → menuOpened()，面板收起 → menuClosed()
+    // menu 状态由外壳单向驱动：面板显示 → menuOpened()，面板收起 → menuClosed()
     menuOpened: () => machine.openMenu(),
     menuClosed: () => menu.notifyClosed(),
     setSize: setSize,
@@ -180,7 +191,7 @@
     state: () => machine.state,
     elapsed: () => machine.elapsed,
     streak: () => machine.touchStreak,
-    threshold: () => BEH.touch_scratch_threshold,
+    threshold: () => THEME.behavior.touch_scratch_threshold,
     menuOpen: () => machine.menuOpen,
   };
 

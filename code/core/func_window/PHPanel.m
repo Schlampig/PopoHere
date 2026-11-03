@@ -1,8 +1,53 @@
+//  PopoHere · 玻璃面板窗口的实现
+//
+//  职责
+//    1. 创建「无边框 + 透明 + 置顶」的 NSWindow，内容为圆角毛玻璃面板；
+//    2. 内嵌 WKWebView 渲染 panel.html，负责视图切换与尺寸上报；
+//    3. 把页面上的交互（确认按钮、拖动、调整尺寸）转成回调交给外壳。
+//
+//  关键实现
+//    · 圆角：NSVisualEffectView 的材质由系统在独立图层合成，仅设置 layer.cornerRadius
+//      无法裁掉材质本体，因此使用 maskImage 裁切，并由容器视图再裁剪一次；
+//      窗口 alpha 为圆角后，系统绘制的阴影也会随之变圆。
+//    · 窗口尺寸变化后调用 invalidateShadow，避免阴影沿用旧尺寸的方形轮廓。
+//    · WKWebView 子类接受 first mouse，使非 key window 上的首次点击即时生效。
+//
+//  构建方式见 code/build/build_app.sh
+
+
 #import "PHPanel.h"
 
-/** 面板窗口通常不是 key window（提醒要是抢焦点就没法打字了），
-    默认实现会把"第一下点击"只用来激活窗口，用户会觉得按钮点不动。
-    让 WKWebView 接受 first mouse，点一下就生效。 */
+/** 面板圆角半径（pt）。与 panel.html 中 `--radius-panel` 的 16px 一一对应：
+    网页层画的是圆角深色底，原生层负责把毛玻璃材质裁成同一个圆角。 */
+static CGFloat const kPanelCornerRadius = 16.0;
+
+/**
+ 生成毛玻璃层的圆角蒙版。
+
+ 背景：NSVisualEffectView 的材质由系统在独立的背景图层中合成，仅设置
+ `layer.cornerRadius` 并不能裁掉材质本体，圆角之外会残留一圈方角，
+ 在浅色桌面上表现为"玻璃纸"外露的直角。
+
+ `maskImage` 是系统为这种场景提供的裁切入口：提供一张四角透明的图，
+ 系统按 `capInsets` 拉伸中间区域填充整个视图，四角保持圆角轮廓。
+ */
+static NSImage *PHCornerMaskImage(CGFloat radius) {
+    CGFloat side = radius * 2 + 1;
+    NSImage *image = [[NSImage alloc] initWithSize:NSMakeSize(side, side)];
+    [image lockFocus];
+    [[NSColor blackColor] setFill];
+    [[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(0, 0, side, side)
+                                     xRadius:radius
+                                     yRadius:radius] fill];
+    [image unlockFocus];
+    image.capInsets = NSEdgeInsetsMake(radius, radius, radius, radius);
+    image.resizingMode = NSImageResizingModeStretch;
+    return image;
+}
+
+/** 面板窗口通常不是 key window（提醒若抢焦点会打断用户输入），
+    AppKit 默认会把"第一下点击"只用于激活窗口，表现为按钮要点两次。
+    让 WKWebView 接受 first mouse，一次点击即生效。 */
 @interface PHFirstMouseWebView : WKWebView
 @end
 
@@ -30,11 +75,18 @@
                                                  defer:NO];
     w.opaque = NO;
     w.backgroundColor = NSColor.clearColor;
-    w.hasShadow = YES;                 // 透明窗口的阴影会跟着内容 alpha（圆角）走
+    w.hasShadow = YES;                 // 阴影由窗口 alpha 推导，内容为圆角时阴影随之变圆
     w.level = NSFloatingWindowLevel;
     w.collectionBehavior = (NSWindowCollectionBehaviorCanJoinAllSpaces |
                             NSWindowCollectionBehaviorFullScreenAuxiliary);
     w.releasedWhenClosed = NO;
+
+    // 容器视图：把整棵视图树裁成圆角，保证窗口 alpha 也是圆角（阴影才不会方）
+    NSView *container = [[NSView alloc] initWithFrame:frame];
+    container.wantsLayer = YES;
+    container.layer.cornerRadius = kPanelCornerRadius;
+    container.layer.masksToBounds = YES;
+    container.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
 
     // 真毛玻璃：采样窗口背后的桌面
     NSVisualEffectView *vev = [[NSVisualEffectView alloc] initWithFrame:frame];
@@ -42,11 +94,10 @@
     vev.blendingMode = NSVisualEffectBlendingModeBehindWindow;
     vev.state = NSVisualEffectStateActive;
     vev.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-    // 关键：把毛玻璃裁成圆角，否则窗口 alpha 是方的，阴影也是方的
-    vev.wantsLayer = YES;
-    vev.layer.cornerRadius = 16.0;
-    vev.layer.masksToBounds = YES;
-    w.contentView = vev;
+    vev.maskImage = PHCornerMaskImage(kPanelCornerRadius);   // 材质本体裁圆角
+    [container addSubview:vev];
+
+    w.contentView = container;
 
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(windowResignedKey:)
@@ -92,9 +143,9 @@
     [self.web evaluateJavaScript:js completionHandler:nil];
 }
 
-/* 视图的唯一入口：改属性 → 同步页面。
-   以前是"属性归属性、页面归页面"，谁调了 Panel.setView 只有页面知道，
-   于是面板可以停在上次的子页面，而外壳以为它还在主菜单。 */
+/* 视图的唯一入口：修改属性即同步页面。
+   若页面与属性各自维护视图状态，面板可能停留在此前的子页面，
+   而外壳仍认为它处于主菜单；由属性驱动可保证两侧始终一致。 */
 - (void)setView:(NSString *)view {
     _view = [view copy];
     [self applyView];
@@ -120,6 +171,7 @@
     y = MAX(NSMinY(vis) + 4, MIN(y, NSMaxY(vis) - size.height - 4));
 
     [self.window setFrame:NSMakeRect(x, y, size.width, size.height) display:YES];
+    [self.window invalidateShadow];
     [self.window makeKeyAndOrderFront:nil];
     if (self.onShow) self.onShow();
 }
@@ -132,6 +184,7 @@
     CGFloat x = NSMaxX(vis) - size.width - 16;
     CGFloat y = NSMaxY(vis) - size.height - 16;
     [self.window setFrame:NSMakeRect(x, y, size.width, size.height) display:YES];
+    [self.window invalidateShadow];
     [self.window orderFrontRegardless];      // 提醒要压住其它窗口，但不抢键盘焦点
     if (self.onShow) self.onShow();
 }
@@ -150,6 +203,7 @@
     CGFloat x = NSMaxX(vis) - size.width;
     CGFloat y = NSMinY(vis);
     [self.window setFrame:NSMakeRect(x, y, size.width, size.height) display:YES];
+    [self.window invalidateShadow];
     [self.window orderFront:nil];                // 不抢焦点
     if (self.onShow) self.onShow();
 }
@@ -173,6 +227,7 @@
     f.origin.x = MAX(NSMinX(vis), MIN(f.origin.x, NSMaxX(vis) - size.width));
     f.origin.y = MAX(NSMinY(vis), MIN(f.origin.y, NSMaxY(vis) - size.height));
     [self.window setFrame:f display:YES];
+    [self.window invalidateShadow];
 }
 
 - (void)hide {

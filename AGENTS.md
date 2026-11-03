@@ -5,9 +5,9 @@
 ## 项目是什么
 
 以用户自家猫 Popo 的照片为素材做的 **macOS 桌面宠物**。纯本地运行、零外部 API、完全无声。
-v1.0 已完成并开源，v2.0 正在规划（见 `doc/PRD/PRD.md`）。
+v2.0 已完成，仓库已转为 public。
 
-- 仓库：<https://github.com/Schlampig/PopoHere>（当前 private，目标是转 public）
+- 仓库：<https://github.com/Schlampig/PopoHere>
 - 主分支 `main`，remote 已配好，本机装了 osxkeychain 凭据，可直接 push
 - 提交署名走 GitHub 匿名邮箱（`16538895+Schlampig@users.noreply.github.com`），**不会泄露真实邮箱**
 
@@ -71,7 +71,7 @@ node code/test/state_machine_test.js && python3 code/test/click_mash_test.py \
   否则躺着和坐着的两帧看着像忽大忽小。实测同状态一致度 0.97–1.00（归一前 0.83–0.91）
 - **不旋转、不翻转任何素材**（2026-11-01 起）：照片方向 = 最终显示方向。
   曾做过 `orientation.json` 手动旋转，但自动纠正会"猜错用户的意图"（`idle_3` 被转成猫头朝右，
-  用户觉得身体怪），已整套删除。这是刻意的取舍，**别再加回来**；方向问题写进 `source/README.md` 让用户自己转
+  用户觉得身体怪），已整套删除。这是刻意的取舍，**别再加回来**；方向问题写进 `doc/UserGuide.md` 让用户自己转
 
 替换后要重点手测：**各状态切换会不会"跳"**、**同状态多帧的呼吸感**、**挠人/被撸是否不一样了**。
 
@@ -96,10 +96,10 @@ code/core/                桌宠本体（只跟功能有关，与造型无关）
 code/build/               构建与打包脚本 + 产物（产物 gitignore）
 code/test/                测试
 code/prototype/           HTML 外壳模板（CSS + DOM）
-doc/PRD/PRD.md            产品需求（当前版本）
-doc/ARCHITECTURE.md       架构与踩坑（改代码前读）
-doc/usage_zh.md           给最终用户的中文说明（打包时复制进 zip）
+doc/UserGuide.md          用户指南（使用 + 自己制作，打包时复制进 zip）
+doc/UserGuide_en.md       英文版用户指南
 doc/README_en.md          README 英文版
+doc/PRD/                  历次 PRD（PRD_v<版本>_<日期>）
 ```
 
 **根目录只放**：`README.md`、`AGENTS.md`、`LICENSE`、`.gitignore`，以及三个目录 `source/ code/ doc/`。
@@ -160,7 +160,8 @@ PRD 原本定 Python + PySide6，但 pip 装不上（环境 bulk-install guard �
 
 JS 用 `clientX` 算位移 + `postMessage` 移动窗口会形成**坐标系反馈环**（视口随窗口移动，delta 被自己抵消），表现为剧烈抖动。
 现在：`NSEvent` 本地监视器 + `[NSEvent mouseLocation]` 同步 `setFrameOrigin`；JS 只用 `screenX/screenY` 做阈值判定。
-完整分析见 `doc/ARCHITECTURE.md`。**改拖拽前先跑 `drag_tracking_test.py`**。
+完整分析见 `doc/UserGuide.md` 的「拖拽：一个必须注意的坐标系问题」。
+**改拖拽前先跑 `drag_tracking_test.py`**。
 
 ### 3. `dragging` 状态的 motion 必须是 `none`
 
@@ -254,9 +255,12 @@ JS 用 `clientX` 算位移 + `postMessage` 移动窗口会形成**坐标系反�
 
 | 文档 | 读者 |
 |---|---|
-| `README.md` | 仓库门面：产品介绍 + 用法 + DIY 指南 |
-| `doc/README_en.md` | 英文版 README |
-| `doc/PRD/PRD.md` | 产品需求（最新版本） |
-| `doc/ARCHITECTURE.md` | 开发者：架构、数据流、踩坑 |
-| `doc/usage_zh.md` | 最终用户：安装与玩法（会打进 zip） |
+| `README.md` | 仓库门面：产品介绍 + 用法 + 改造入口 |
+| `doc/README_en.md` | 英文版 README（与中文版逐段对应） |
+| `doc/UserGuide.md` | 用户指南：安装 / 互动 / 功能 / 自己做一只 |
+| `doc/UserGuide_en.md` | 英文版用户指南 |
+| `doc/PRD/PRD_v2_261030.md` | 当前版本的产品需求 |
+| `doc/PRD/PRD_v1_261027.md` | v1.0 的 PRD（留档） |
 | `AGENTS.md` | 本文件，AI 接手入口 |
+
+> `doc/CHANGELOG.md` 只在本地维护，已加入 `.gitignore`，不随仓库发布。

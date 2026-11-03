@@ -1,12 +1,17 @@
 //  PopoHere · 玻璃面板窗口
 //
-//  一个可复用的透明浮窗，里面装 WKWebView 渲染 panel.html。
-//  两个实例：
-//    - 右键菜单（menu）：贴着光标弹出，失焦即收
-//    - 状态面板（status）：常驻右下角，可拖动，失焦不消失
+//  职责
+//    提供一个可复用的透明浮窗，内部以 WKWebView 渲染 panel.html。
+//    面板的三种用途由 view 属性区分：
+//      menu     右键菜单，贴着光标弹出，失焦即收
+//      status   状态面板，常驻屏幕右下角，可拖动，失焦不消失
+//      alert    到点提醒，常驻屏幕右上角，不抢键盘焦点
 //
-//  真正的毛玻璃来自 NSVisualEffectView（blendingMode = behindWindow），
-//  CSS 的 backdrop-filter 在透明窗口里采样不到桌面，只负责压暗和描边。
+//  材质来源
+//    毛玻璃由 NSVisualEffectView（blendingMode = behindWindow）提供；
+//    CSS 的 backdrop-filter 在透明窗口中采样不到桌面，只负责压暗与描边。
+//    圆角由 NSVisualEffectView 的 maskImage 裁切，容器视图再裁剪一次，
+//    确保窗口 alpha 为圆角，系统阴影随之变圆。
 
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>

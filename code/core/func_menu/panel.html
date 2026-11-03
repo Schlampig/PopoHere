@@ -1,4 +1,25 @@
 <!DOCTYPE html>
+<!--
+  PopoHere · 玻璃面板页面
+
+  职责
+    以同一套玻璃样式渲染四种视图：
+      menu       右键菜单
+      reminders  定时提醒设置
+      todos      待办清单
+      status     状态面板
+      alert      到点提醒
+    视图之间由 Panel.setView() 切换，内容由外壳通过 Panel.update() 推送。
+
+  与外壳的通信
+    上行：window.webkit.messageHandlers.popo.postMessage({ type, ... })
+          type 为 panelResize / panelDragStart / action
+    下行：外壳调用 Panel.update(snapshot) / Panel.setView(name) / Panel.setAlerts(list)
+
+  设计令牌
+    颜色、圆角、行高集中在 :root 的 CSS 变量中。--radius-panel 必须与
+    PHPanel.m 的 kPanelCornerRadius 一致，否则网页圆角与毛玻璃圆角会错位。
+-->
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -266,9 +287,7 @@
 
 <script>
 (function () {
-  const qs = new URLSearchParams(location.search);
-  const VIEW = (location.hash || '').replace('#', '') || qs.get('view') || 'menu';
-  const MOCK = qs.get('mock') === '1';
+  const VIEW = (location.hash || '').replace('#', '') || 'menu';
 
   let snapshot = {
     size: 220, sound: false, soundAvailable: false,
@@ -279,7 +298,6 @@
   let view = VIEW;
 
   const post = (msg) => {
-    if (MOCK) { console.log('[panel]', msg); return; }
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.popo) {
       window.webkit.messageHandlers.popo.postMessage(msg);
     }
@@ -462,33 +480,6 @@
     /* 到点提醒的整叠卡片，由外壳每秒推一次 */
     setAlerts(list) { snapshot.alerts = list; if (view === 'alert') render(); },
   };
-
-  if (MOCK) {
-    snapshot = {
-      alerts: [
-        { id: 1, text: '摸鱼结束，接着干活~', sec: 7 },
-        { id: 2, text: '到时间了，请去喝口水！', sec: 3 },
-      ],
-      size: 220, sound: false, soundAvailable: false, autostart: false,
-      petHidden: false, statusOpen: true, version: '2.0.0',
-      state: 'touch', elapsed: 1.2, streak: 7, threshold: 10,
-      states: [
-        { id: 'idle', cn: '静息' }, { id: 'touch', cn: '被撸' }, { id: 'scratch', cn: '挠人' },
-        { id: 'play', cn: '自娱' }, { id: 'sleep', cn: '睡觉' }, { id: 'startled', cn: '惊醒' },
-        { id: 'landed', cn: '落地' },
-      ],
-      reminders: [
-        { name: '摸鱼', minutes: 25, enabled: true, repeat: false },
-        { name: '喝水', minutes: 45, enabled: true, repeat: true },
-        { name: '久坐拉伸', minutes: 60, enabled: false, repeat: false },
-      ],
-      todos: [
-        { text: '把 PRD 第 7 章的设计变量落成 CSS', done: true },
-        { text: '验证面板在浅色桌面上的可读性', done: false },
-        { text: '写 v2.0 的 CHANGELOG', done: false },
-      ],
-    };
-  }
 
   render();
 })();

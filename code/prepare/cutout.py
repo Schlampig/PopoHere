@@ -87,8 +87,8 @@ def trim_and_normalize(out: Image.Image) -> Image.Image:
 def make_tray_icon(source: Image.Image, size: int = 44) -> Image.Image:
     """从一张抠好的图生成 macOS 菜单栏模板图标（纯黑 + alpha）。
 
-    关键：**先裁到内容再缩放**。之前直接在 640 画布上 thumbnail，
-    猫只占中间一小块，到菜单栏里就成了一个 8px 的小点。
+    必须先裁到内容外框再缩放：直接在统一画布上缩放时，主体只占画布中央一小块，
+    缩小到菜单栏尺寸后几乎不可辨认。
     """
     im = source.copy()
     bbox = im.split()[3].getbbox()
@@ -168,8 +168,9 @@ def list_sources() -> list[str]:
 def check() -> int:
     """校验命名：每张原图都要能对上状态表。
 
-    刻意**不读 theme.json**——那份文件是上一次运行的产物，换素材时它还是旧名字，
-    拿它校验新素材只会制造假报错。真正该守的规范是 build_theme.STATE_DEFAULTS。
+    校验基准是 build_theme.STATE_DEFAULTS，而不是 theme.json：
+    theme.json 由上一次运行生成，更换素材后其中的文件名仍是旧值，
+    以它作为基准会产生大量误报。
     """
     from build_theme import STATE_DEFAULTS, NON_STATE
 

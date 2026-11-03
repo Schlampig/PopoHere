@@ -4,42 +4,43 @@
 
 # PopoHere
 
-**一只住在你 Mac 桌面上的猫。**
+**让可爱的 Popo 猫住进你的 Mac 桌面～**
 
-用你自己的猫做一只桌宠——拍几张照片丢进文件夹，剩下交给它。
+让 Popo 猫成为你的桌宠及小助手。或用你自己的宠物伙伴做一只桌宠——只需拍几张照片丢进文件夹，剩下交给 Popo。
 
-[![macOS](https://img.shields.io/badge/macOS-11%2B-black?logo=apple&logoColor=white)](#安装)
+[![macOS](https://img.shields.io/badge/macOS-11%2B-black?logo=apple&logoColor=white)](#如何获取)
 [![Version](https://img.shields.io/badge/version-2.0.0-8FAE9B)](#)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Dependencies](https://img.shields.io/badge/dependencies-none-success)](#)
 
-[下载](#安装) · [玩法](#怎么和它玩) · [自己做一只](#自己做一只) · [English](doc/README_en.md)
+[如何获取](#如何获取) · [怎么使用](#怎么使用) · [如何改造](#如何改造) · [English](doc/README_en.md) · [MIT](LICENSE)
 
-<img src="doc/assets/hero.png" width="100%" alt="PopoHere 桌面截图">
+<img src="doc/assets/concept.png" width="100%" alt="PopoHere 概念预览">
+
+<sub>注意：概念预览图，真实效果略有不同。</sub>
 
 </div>
 
 ---
 
-## 它是什么
+## 谁是 Popo
 
-PopoHere 是一个 macOS 桌面宠物。不占 Dock、不抢焦点、不联网，就静静待在你的屏幕上——
-会呼吸、会溜达、会趴下睡觉，被你拎起来的时候四脚乱蹬，撸久了会翻脸。
+PopoHere 是一个 macOS 桌面宠物。不占 Dock、不抢焦点、不联网，就静静待在你的屏幕上——会呼吸、会溜达、会趴下睡觉，被你拎起来的时候四脚乱蹬，撸久了会翻脸。
 
-原型是一只叫 **Popo** 的英国短毛猫（照片就是她本人）。整个项目只有 **1.2MB**，没有一行网络代码。
+这是开发者在大模型 DeepSeek V4.1-flash-1017、Hy4 preview、Seedream4.5 及 Workbuddy 协助下，为自家可爱的（重达 7kg，减肥中）美国短毛猫 Pocky（昵称 Popo）制作的轻量级桌宠应用。Popo 是一个安静、治愈的孩子，当我们在桌前办公时，她会静静爬上自己专属的塑料小红椅子，在上面打盹，或仅仅是沉静地看着我们。希望通过这个小项目，让更多人和 Popo 做朋友。
 
-## 为什么不是一张会动的桌面图
+## PopoHere 的有趣亮点
 
 | | |
 |---|---|
 | 🧠 **真的是个状态机** | 静息 / 被撸 / 挠人 / 自娱 / 睡觉 / 惊醒 / 落地，按猫的天性用概率流转；不是一段动画循环播到底 |
-| 🖐 **拖拽跟手** | 窗口位移由原生层用**屏幕坐标**同步跟踪，不靠 JS 追光标——这里面有个经典的反馈环坑，见 [ARCHITECTURE](doc/ARCHITECTURE.md) |
+| 🖐 **拖拽跟手** | 窗口位移由原生层用**屏幕坐标**同步跟踪，不靠 JS 追光标——这里面有个经典的反馈环坑，见[用户指南](doc/UserGuide.md#拖拽一个必须注意的坐标系问题) |
 | 🎲 **一个状态多张图** | 同一状态放几张素材，每次进入随机抽一张并锁定，猫不会永远保持同一个姿势 |
 | ⏰ **提醒不依赖猫** | 到点弹独立小窗，**猫被隐藏、没有音频、没有动画都不影响** |
 | 🪶 **零依赖** | Objective-C + 一个 WebView，通用二进制（Intel / Apple 芯片），启动不到半秒 |
-| 🎨 **可以换成你的宠物** | 换图不用改代码，跑两条命令重新生成 |
+| 🎨 **可以换成你的宠物** | 换图不用改代码，跑几条命令重新生成 |
 
-## 安装
+## 如何获取
 
 **需要 macOS 11 (Big Sur) 或更高。**
 
@@ -56,34 +57,35 @@ PopoHere 是一个 macOS 桌面宠物。不占 Dock、不抢焦点、不联网�
 > xattr -dr com.apple.quarantine /Applications/PopoHere.app
 > ```
 
-## 怎么和它玩
+系统要求、安装细节与拦截提示的处理方式，详见[用户指南 1.1 安装与启动](doc/UserGuide.md#11-安装与启动)。
+
+## 怎么使用
+
+**和它互动**
 
 | 你想做的事 | 怎么操作 |
 |---|---|
-| 换个地方 | 按住猫**拖动**，松手它会自己落地 |
 | 撸它 | 点一下；**连着猛点 10 下**它会翻脸挠你 |
+| 换个地方 | 按住猫**拖动**，松手它会自己落地 |
 | 叫醒它 | 睡着时随便戳一下 |
 | 什么都不做 | 5 秒后自己溜达，或者趴下睡觉 |
 | 打开菜单 | **右键**猫，或点**菜单栏**的小猫图标 |
-| 看它在干嘛 | 菜单里打开「桌宠状态」面板，还能逐个预览状态 |
 
-位置和大小都会记住，下次打开还在原地。
-
-## 定时提醒
+**定时提醒**
 
 右键 →「定时提醒」，三条预置：**摸鱼 25 分钟 / 喝水 45 分钟 / 久坐拉伸 60 分钟**，默认全关。
+每条可设 **一次**（响过即止）或 **间隔**（按间隔循环到你关掉），到点在**屏幕右上角**弹出小窗，
+点「确认」关闭，不理它 10 秒后自动消失；几条同时到点会叠在一起，猫被隐藏时也照样提醒。
 
-- 时间按 **1 → 5 → 10 → 15…** 调，不会出现 6、11 这种错位值
-- 每条后面有 **一次 / 间隔** 开关：
-  - **一次**（默认）：响过就结束，开关自动关掉，适合"提醒我一次"
-  - **间隔**：按你设的间隔循环，直到你自己关掉
-- 到点后在**屏幕右上角**弹出小窗：`到时间了，请去喝口水！（7s）`，点「确认」立刻关，不理它 10 秒后自动消失
-- **几条同时到点会叠在一起**，先关哪条由你决定
-- 猫被隐藏时照样提醒
+**待办清单**
 
-## 自己做一只
+右键 →「待办清单」，最多 10 条、每条 50 字，勾选完成、随时清空，保存在本地。
 
-不需要会写代码。
+完整的按键说明、默认取值与状态含义，详见[用户指南 1.3 功能介绍](doc/UserGuide.md#13-功能介绍)。
+
+## 如何改造
+
+本项目完全开源架构与代码，你可以基于此进行二次开发，也可以用当前的代码、自己准备素材构建自己的桌宠，不需要会写代码。以下是快速步骤：
 
 **① 准备照片。** 拍 8–16 张你的宠物，尽量同一机位、同一灯光。放进 `source/origin_images/`，按状态命名：
 
@@ -102,7 +104,6 @@ source/origin_images/
 
 背景尽量用**纯色**（白墙、纯色地板）——预处理是语义分割，不是大模型，纯色背景下边缘最干净。
 **照片的方向就是最终效果**——程序不旋转、不翻转，你给什么姿势就摆什么姿势。
-完整规范见 [source/README.md](source/README.md)。
 
 **② 跑预处理。**
 
@@ -121,46 +122,7 @@ python3 code/prepare/build_theme.py        # 扫文件名生成 theme.json
 
 `code/build/dist/PopoHere.app` 就是你的专属桌宠。
 
-## 技术一览
-
-```text
-Objective-C 外壳（AppKit）
-├── 透明无边框浮窗 + WKWebView
-├── 菜单栏 NSStatusItem / 玻璃面板（NSVisualEffectView）
-└── NSEvent 本地监视器 → 屏幕坐标拖拽
-
-Web 层（无框架，原生 JS）
-├── func_state    状态机（纯逻辑，不碰 DOM → 能被 Node 直接测）
-├── func_render   状态 → 贴图 / 动效 / 气泡
-├── func_input    命中判定、单击 vs 拖拽
-└── func_menu     面板 UI
-
-预处理（Python + rembg）
-└── 抠图 → 归一化 → 同状态面积对齐 → theme.json
-```
-
-<details>
-<summary><b>开发与测试</b>（点开）</summary>
-
-```bash
-# 浏览器预览（带调试面板）
-python3 code/build/build_web.py && open code/build/out/preview.html
-
-# 测试：状态机 58 · 连点 9 · 拖拽 7 · 提醒存储 16
-node code/test/state_machine_test.js
-python3 code/test/click_mash_test.py
-python3 code/test/drag_tracking_test.py
-clang -fobjc-arc -framework Foundation -I code/core/func_reminder \
-  code/test/reminder_store_test.m code/core/func_reminder/PHReminder.m -o /tmp/remtest && /tmp/remtest
-
-# 构建 / 打包
-./code/build/build_app.sh
-python3 code/build/package_release.py
-```
-
-接手这个项目请先读 [AGENTS.md](AGENTS.md)；设计决策与踩坑记录见 [ARCHITECTURE.md](doc/ARCHITECTURE.md)，完整需求见 [PRD](doc/PRD/PRD.md)。
-
-</details>
+素材规格、扩展名与命名规则、环境准备与常见报错，详见[用户指南 2.1 制作步骤](doc/UserGuide.md#21-制作步骤)。
 
 ## 常见问题
 
@@ -178,8 +140,6 @@ python3 code/build/package_release.py
 
 <div align="center">
 
-猫是真实的，代码是开源的。拿去改成你的宠物吧。
-
-[MIT](LICENSE) · [English](doc/README_en.md)
+愿 Popo 陪你度过宁静充实、灵感迸发的每一天。
 
 </div>

@@ -6,7 +6,7 @@
 两个产物的唯一区别是 __NATIVE__ 标志：原生模式下隐藏调试面板与假桌面背景，
 并通过 window.App 暴露给 Objective-C 外壳调用。
 
-模块拼装顺序 = 依赖顺序，别随便调：
+模块拼装顺序即依赖顺序，调整时须保持该次序：
     func_state → func_render → func_input → func_menu → main
 """
 

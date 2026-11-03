@@ -14,12 +14,29 @@ __pycache__/
 .venv/
 venv/
 
-# ---- 作者自己的原始照片（体积大且不对外分发；换素材时本地放这里）----
+# ---- 原始素材 ----
+# 仓库只保留每个状态的第一张原图作为示例，其余素材由使用者本地维护。
+# 需要增加示例图时，在下方补一行 ! 例外即可。
 source/origin_images/*.png
 source/origin_images/*.jpg
 source/origin_images/*.jpeg
+!source/origin_images/idle_1.png
+!source/origin_images/touch_1.png
+!source/origin_images/scratch_1.png
+!source/origin_images/play_1.png
+!source/origin_images/sleep_1.png
+!source/origin_images/dragging_1.png
+!source/origin_images/menu_1.png
+!source/origin_images/startled_1.png
+!source/origin_images/landed_1.png
+!source/origin_images/logo_1.png
+!source/origin_images/menubar_1.png
 
-# ---- 构建产物（都可由 code/build/ 下的脚本重新生成，不入库）----
+# ---- 本地维护的文档 ----
+# 更新日志记录本地开发过程，不在公开仓库中维护。
+doc/CHANGELOG.md
+
+# ---- 构建产物（都可由 code/build/ 下的脚本重新生成）----
 code/build/out/
 code/build/dist/
 code/build/releases/
@@ -27,9 +44,9 @@ code/build/site/
 *.app
 *.dmg
 
-# ---- 本地工具链状态（含本机绝对路径，勿公开）----
+# ---- 本地工具链状态（含本机绝对路径）----
 .workbuddy/
 .wbapp_*.genie
 
-# ---- 本地历史归档（旧版本素材与截图，仅本机保留）----
+# ---- 本地历史归档 ----
 归档/
